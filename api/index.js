@@ -84,6 +84,28 @@ const assistantOutputSchema={
     navigation:{type:"STRING",enum:["none","quote","kyc","tracker","growth","advisor"]}
   },required:["reply","profile_updates","selected_skus","navigation"]
 };
+
+// Translate interface copy with the configured Gemini API; no third-party browser translation widget.
+app.post("/api/assistant/translate",asyncRoute(async(req,res)=>{
+  if(!process.env.GEMINI_API_KEY)return res.status(503).json({error:"Website translation is not configured. Add GEMINI_API_KEY in Vercel."});
+  const input=validate(z.object({
+    language:z.enum(["hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]),
+    texts:z.array(z.string().max(500)).min(1).max(100)
+  }),req.body);
+  const language=({"hi":"Hindi","hi-Latn":"natural Roman-script Hinglish","bn":"Bengali","mr":"Marathi","ta":"Tamil","te":"Telugu","gu":"Gujarati","kn":"Kannada","ml":"Malayalam","pa":"Punjabi"})[input.language];
+  const model=process.env.GEMINI_MODEL||"gemini-3.8-flash";
+  const upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
+    method:"POST",headers:{"Content-Type":"application/json"},signal:AbortSignal.timeout(25000),
+    body:JSON.stringify({contents:[{role:"user",parts:[{text:"Translate each UI string into "+language+". Return ONLY a JSON array of strings in exactly the same order and length. Preserve placeholders, numbers, product/SKU names, punctuation, HTML entities and meaning. Do not add explanations. Strings: "+JSON.stringify(input.texts)}]}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:5000,temperature:0.1}})
+  });
+  const payload=await upstream.json();
+  if(!upstream.ok){console.error("Gemini UI translation error",upstream.status,payload?.error?.message||"");return res.status(502).json({error:"Translation provider could not translate this page right now."})}
+  const raw=payload?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
+  let translations;try{translations=JSON.parse(raw)}catch{return res.status(502).json({error:"Translation provider returned an invalid response."})}
+  if(!Array.isArray(translations)||translations.length!==input.texts.length||translations.some(x=>typeof x!=="string"))return res.status(502).json({error:"Translation provider returned incomplete translations."});
+  res.json({translations});
+}));
+
 app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   if(!process.env.GEMINI_API_KEY)return res.status(503).json({error:"AI assistant is not configured. Add GEMINI_API_KEY in Vercel project environment variables."});
   const input=validate(z.object({
