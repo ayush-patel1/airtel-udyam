@@ -70,6 +70,61 @@ app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:n
   storage:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION)
 }}));
 
+// Public assistant endpoint. Keep provider credentials server-side; never send them to the browser.
+const assistantRequests=new Map();
+const assistantOutputSchema={
+  type:"object",additionalProperties:false,
+  properties:{
+    reply:{type:"string"},
+    profile_updates:{type:"object",additionalProperties:false,properties:{
+      name:{type:["string","null"]},type:{type:["string","null"]},city:{type:["string","null"]},
+      employees:{type:["integer","null"]},sites:{type:["integer","null"]},budget:{type:["number","null"]},need:{type:["string","null"]}
+    },required:["name","type","city","employees","sites","budget","need"]},
+    selected_skus:{type:"array",items:{type:"string"}},
+    navigation:{type:"string",enum:["none","quote","kyc","tracker","growth","advisor"]}
+  },required:["reply","profile_updates","selected_skus","navigation"]
+};
+app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
+  if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:"AI assistant is not configured. Add OPENAI_API_KEY in Vercel project environment variables."});
+  const input=validate(z.object({
+    message:z.string().trim().min(1).max(4000),
+    history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
+    business:z.record(z.string(),z.unknown()).optional(),
+    catalogue:z.array(z.object({sku:z.string(),name:z.string(),category:z.string(),description:z.string().optional(),monthlyMin:z.number(),monthlyMax:z.number(),setupFee:z.number(),eligible:z.boolean(),reason:z.string().optional()})).max(40).default([]),
+    editMode:z.boolean().default(false)
+  }),req.body);
+  const now=Date.now(),key=req.ip||"unknown",recent=(assistantRequests.get(key)||[]).filter(t=>now-t<60000);
+  if(recent.length>=12)return res.status(429).json({error:"Please wait a moment before sending another message."});
+  recent.push(now);assistantRequests.set(key,recent);
+  const instructions=[
+    "You are Udyam Assistant for Airtel Business, helping Indian MSMEs with onboarding and digital services.",
+    "Be conversational, specific, concise and context-aware. Answer the actual question; do not force every query into a product recommendation.",
+    "Use INR for prices. Never invent catalogue prices, eligibility, Airtel coverage, government verification, order status or integration status.",
+    "The supplied catalogue includes server-calculated eligibility. Recommend only entries marked eligible=true. Use their SKU values in selected_skus. Never calculate or alter prices.",
+    "If information is missing, ask one clear follow-up question. Do not assume city, employee count, GST status or business type.",
+    "When editMode is true, help the user change the business profile in chat. If they identify a field but not its new value, ask for the value. When a clear new value is provided, set only that field in profile_updates and confirm it. For normal messages, profile_updates must be all null.",
+    "For KYC, explain that format and sample registry checks are not official verification; sensitive documents must use secure upload and uncertain cases need human review.",
+    "Do not claim that a recommendation, quote, KYC check, message or order has been executed unless the application context confirms it.",
+    "Return valid structured data. reply is plain text with concise paragraphs; no HTML. selected_skus must contain only catalogue SKUs. navigation should be quote, kyc, tracker or growth only when a clear next-step screen is useful."
+  ].join("\n");
+  const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue,editMode:input.editMode,history:input.history,message:input.message});
+  const upstream=await fetch("https://api.openai.com/v1/responses",{
+    method:"POST",headers:{Authorization:"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-5.5",store:false,instructions,
+      input:[{role:"user",content:[{type:"input_text",text:context}]}],
+      text:{format:{type:"json_schema",name:"udyam_assistant_reply",strict:true,schema:assistantOutputSchema}},
+      max_output_tokens:900})
+  });
+  const payload=await upstream.json();
+  if(!upstream.ok){console.error("OpenAI assistant error",upstream.status,payload?.error?.code||payload?.error?.type||"provider_error");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again."});}
+  const raw=(payload.output||[]).flatMap(item=>item.content||[]).find(part=>part.type==="output_text")?.text;
+  if(!raw)return res.status(502).json({error:"The AI assistant returned an empty response. Please try again."});
+  let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"The AI assistant returned an unreadable response. Please try again."});}
+  const allowed=new Set(input.catalogue.filter(x=>x.eligible).map(x=>x.sku));
+  result.selected_skus=(result.selected_skus||[]).filter(sku=>allowed.has(sku));
+  res.json({result,model:process.env.OPENAI_MODEL||"gpt-5.5"});
+}));
+
 // Bootstrap is intentionally disabled in production. Create the first ADMIN through a one-time secure script.
 app.post("/api/auth/login", asyncRoute(async(req,res) => {
   const input=validate(z.object({email:z.email(),password:z.string().min(8)}),req.body);
