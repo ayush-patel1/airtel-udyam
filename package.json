@@ -1,0 +1,29 @@
+{
+  "name": "airtel-udyam",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.850.0",
+    "@aws-sdk/client-textract": "^3.850.0",
+    "@aws-sdk/s3-request-presigner": "^3.850.0",
+    "@prisma/client": "^6.14.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jose": "^6.0.12",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "prisma": "^6.14.0",
+    "vercel": "^44.2.0"
+  }
+}
