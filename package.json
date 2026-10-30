@@ -8,7 +8,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
-    "test": "node --test"
+    "test": "node --test",
+    "admin:create": "node scripts/create-admin.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.850.0",
