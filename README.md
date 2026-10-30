@@ -43,3 +43,10 @@ The Growth Cockpit adds:
 - A Bundle Passport decision trace across profile, quote, KYC and order status.
 
 All optimiser recommendations are deterministic catalogue heuristics, not an AI claim. ROI is scenario modelling from user-entered assumptions, not a guaranteed outcome. WhatsApp draft links do not send messages through the Cloud API; live delivery requires Meta credentials, valid opt-in, approved templates where applicable, and the configured backend.
+
+
+## AI assistant configuration
+
+The Udyam chat uses the OpenAI Responses API through the server-side `POST /api/assistant/chat` endpoint. Set `OPENAI_API_KEY` in Vercel Project Settings → Environment Variables (Production and Preview), and optionally set `OPENAI_MODEL` (defaults to `gpt-5.5`). Never place the key in `index.html` or any `NEXT_PUBLIC_` variable. The endpoint sends the current business profile, recent chat turns and catalogue eligibility/price context to the model. Model-suggested catalogue SKUs are filtered against the server-provided eligible list; quote totals and eligibility remain deterministic application logic.
+
+The chat shows task-specific activity labels for profile edits, recommendations, pricing, KYC, tracking, troubleshooting and general questions. These labels describe the request workflow; they are not a display of the model's private reasoning. Chat history is held in the current page session. Requests use `store:false` for the Responses API. Configure an appropriate OpenAI API project budget and usage limits before public demos.
