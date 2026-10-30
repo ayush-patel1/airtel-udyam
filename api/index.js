@@ -73,10 +73,10 @@ app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:n
 // Public assistant endpoint. Keep provider credentials server-side; never send them to the browser.
 const assistantRequests=new Map();
 const assistantOutputSchema={
-  type:"OBJECT",additionalProperties:false,
+  type:"OBJECT",
   properties:{
     reply:{type:"STRING"},
-    profile_updates:{type:"OBJECT",additionalProperties:false,properties:{
+    profile_updates:{type:"OBJECT",properties:{
       name:{type:"STRING",nullable:true},type:{type:"STRING",nullable:true},city:{type:"STRING",nullable:true},
       employees:{type:"INTEGER",nullable:true},sites:{type:"INTEGER",nullable:true},budget:{type:"NUMBER",nullable:true},need:{type:"STRING",nullable:true}
     },required:["name","type","city","employees","sites","budget","need"]},
@@ -116,7 +116,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
       generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:900,temperature:0.3}})
   });
   const payload=await upstream.json();
-  if(!upstream.ok){console.error("Gemini assistant error",upstream.status,payload?.error?.status||"provider_error");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again."});}
+  if(!upstream.ok){console.error("Gemini assistant error",upstream.status,payload?.error?.status||"provider_error",payload?.error?.message||"");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again.",providerStatus:upstream.status});}
   const raw=payload.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("").trim();
   if(!raw)return res.status(502).json({error:"The AI assistant returned an empty response. Please try again."});
   let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"The AI assistant returned an unreadable response. Please try again."});}
