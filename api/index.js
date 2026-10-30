@@ -108,7 +108,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     "Return valid structured data. reply is plain text with concise paragraphs; no HTML. selected_skus must contain only catalogue SKUs. navigation should be quote, kyc, tracker or growth only when a clear next-step screen is useful."
   ].join("\n");
   const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue,editMode:input.editMode,history:input.history,message:input.message});
-  const model=process.env.GEMINI_MODEL||"gemini-2.5-flash";
+  const model=process.env.GEMINI_MODEL||"gemini-3.8-flash";
   const upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
@@ -122,7 +122,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"The AI assistant returned an unreadable response. Please try again."});}
   const allowed=new Set(input.catalogue.filter(x=>x.eligible).map(x=>x.sku));
   result.selected_skus=(result.selected_skus||[]).filter(sku=>allowed.has(sku));
-  res.json({result,model:process.env.GEMINI_MODEL||"gemini-2.5-flash"});
+  res.json({result,model:process.env.GEMINI_MODEL||"gemini-3.8-flash"});
 }));
 
 // Bootstrap is intentionally disabled in production. Create the first ADMIN through a one-time secure script.
