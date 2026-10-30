@@ -1,4 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "functions": { "api/index.js": { "maxDuration": 30 } },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
 }
