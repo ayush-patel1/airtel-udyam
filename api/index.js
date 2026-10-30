@@ -73,15 +73,15 @@ app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:n
 // Public assistant endpoint. Keep provider credentials server-side; never send them to the browser.
 const assistantRequests=new Map();
 const assistantOutputSchema={
-  type:"object",additionalProperties:false,
+  type:"OBJECT",additionalProperties:false,
   properties:{
-    reply:{type:"string"},
-    profile_updates:{type:"object",additionalProperties:false,properties:{
-      name:{type:["string","null"]},type:{type:["string","null"]},city:{type:["string","null"]},
-      employees:{type:["integer","null"]},sites:{type:["integer","null"]},budget:{type:["number","null"]},need:{type:["string","null"]}
+    reply:{type:"STRING"},
+    profile_updates:{type:"OBJECT",additionalProperties:false,properties:{
+      name:{type:"STRING",nullable:true},type:{type:"STRING",nullable:true},city:{type:"STRING",nullable:true},
+      employees:{type:"INTEGER",nullable:true},sites:{type:"INTEGER",nullable:true},budget:{type:"NUMBER",nullable:true},need:{type:"STRING",nullable:true}
     },required:["name","type","city","employees","sites","budget","need"]},
-    selected_skus:{type:"array",items:{type:"string"}},
-    navigation:{type:"string",enum:["none","quote","kyc","tracker","growth","advisor"]}
+    selected_skus:{type:"ARRAY",items:{type:"STRING"}},
+    navigation:{type:"STRING",enum:["none","quote","kyc","tracker","growth","advisor"]}
   },required:["reply","profile_updates","selected_skus","navigation"]
 };
 app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
