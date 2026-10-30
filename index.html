@@ -294,7 +294,7 @@ async function sendCopilotMessage(){
  renderCopilotContext();
  try{
   const response=await fetch("/api/assistant/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-   message:msg,history:assistantHistory.slice(-10),business:state.profile||null,catalogue:assistantCatalogue(),editMode:!!businessEditField
+   message:msg,history:assistantHistory.slice(-10),business:state.profile?{name:state.profile.name,type:state.profile.type,segment:state.profile.segment,city:state.profile.city,tier:state.profile.tier,employees:state.profile.employees,sites:state.profile.sites,budget:state.profile.budget,need:state.profile.need}:null,catalogue:assistantCatalogue(),editMode:!!businessEditField
   })});
   const data=await response.json();if(!response.ok)throw new Error(data.error||"Assistant request failed");
   const answer=applyAssistantResult(data.result||{});
@@ -302,31 +302,6 @@ async function sendCopilotMessage(){
   bubble.textContent=answer;bubble.style.whiteSpace="pre-line";
  }catch(error){bubble.textContent=error.message||"I couldn't reach the assistant. Please try again.";bubble.classList.add("assistant-error")}
  finally{clearInterval(rotate);renderCopilotContext();$("chatStream").scrollTop=$("chatStream").scrollHeight}
-}
-function respondToBusiness(msg){
- const edit=assistantEdit(msg);if(edit)return edit;
- const t=msg.toLowerCase(),budgetMatch=msg.match(/(?:under|below|budget|within|₹|rs\.?\s*)([0-9][0-9,]*)/i),budget=budgetMatch?parseInt(budgetMatch[1].replace(/,/g,""),10):0;
- const cityMatch=msg.match(/\b(?:in|at|near)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/),empMatch=msg.match(/\b(\d{1,3})\s*(?:employees|staff|people|person|team members)\b/i),siteMatch=msg.match(/\b(\d{1,2})\s*(?:sites|branches|locations|outlets)\b/i);
- const type=/clinic|doctor|dental|healthcare/.test(t)?"clinic":/retail|shop|store/.test(t)?"retail":/manufactur|factory/.test(t)?"manufacturing":/coaching|school|education/.test(t)?"coaching":/accounting|ca firm|professional office/.test(t)?"professional":state.profile?.type||"other";
- const segment=type==="retail"?"micro":type==="manufacturing"?"mfg":"prof";
- const need=/cctv|camera|security/.test(t)?"security":/billing|pos|inventory/.test(t)?"operations":/whatsapp|appointment|reminder|customer/.test(t)?"growth":"reliability";
- const hasClue=/clinic|doctor|dental|healthcare|retail|shop|store|manufactur|factory|coaching|school|education|accounting|ca firm|office/.test(t)||cityMatch||empMatch||siteMatch||budget;
- if(hasClue){const old=state.profile||{};state.profile={name:old.name||(/clinic|doctor|dental|healthcare/.test(t)?"Healthcare business":/retail|shop|store/.test(t)?"Retail business":/manufactur|factory/.test(t)?"Manufacturing business":"My business"),type,segment,city:cityMatch?cityMatch[1]:old.city||"",tier:old.tier||"2",employees:empMatch?+empMatch[1]:old.employees||0,sites:siteMatch?+siteMatch[1]:old.sites||1,budget:budget||old.budget||0,need,impact:msg,gstin:old.gstin||""};persist();renderCopilotContext()}
- const p=state.profile;
- if(!p||!p.city||!p.employees){return "<b>Great, I’m getting your business context.</b><p>Before I recommend anything, which city is your business in, and approximately how many employees do you have?</p>"}
- if(/edit|change|update|modify/.test(t)&&/business|profile|details|information/.test(t)){businessEditField='choose';return '<b>Sure — I can edit your business profile through this chat.</b><p>Which detail should we change: name, type, city, employees, sites, budget, or primary need?</p>'}
- if(/whatsapp|message|follow.?up|remind/.test(t)){return "I can help prepare customer communication and onboarding reminders. I’ll keep sensitive KYC documents in a secure upload flow, not in WhatsApp chat. <button class='chat-action' onclick='go(\"growth\")'>Open WhatsApp journey →</button>"}
- if(/kyc|verify|gst|udyam|document/.test(t)){return "I’ll guide you through consent, GSTIN/Udyam checks and supporting evidence. Any uncertain result should go to a human reviewer. <button class='chat-action' onclick='go(\"kyc\")'>Continue to verification →</button>"}
- if(/track|status|activation|order/.test(t)){return "Let’s look at your onboarding progress and next action. <button class='chat-action' onclick='go(\"tracker\")'>View activation tracker →</button>"}
- if(/price|quote|bundle|recommend|suggest|internet|wifi|broadband|cctv|appointment|billing|connectivity|need/.test(t)||copilotTurns>0){
-  const cap=budget||p.budget||5000,goal=need==="security"?"security":need==="operations"?"operations":need==="growth"?"growth":"reliability";
-  const ranked=PRODUCTS.filter(x=>x.segments.includes(p.segment)&&x.tiers.includes(p.tier)&&p.employees>=x.employees&&p.sites>=x.sites&&(!x.gst||validActiveGst(p.gstin))).map(x=>({...x,score:scoreProduct(x,goal)})).sort((a,b)=>b.score-a.score||a.max-b.max);
-  const chosen=[];let total=0;for(const x of ranked){if(chosen.length>=4)break;if(total+x.max<=cap){chosen.push(x);total+=x.max}}
-  if(!chosen.length)return "I understand what you’re aiming for. I can’t fit a suitable eligible combination under "+money(cap)+"/month yet. Should we increase the budget, or focus on just one priority first?";
-  state.selected={};chosen.forEach(x=>state.selected[x.id]=1);invalidateDownstream();persist();renderProducts();
-  return "<b>Here’s the starting point I’d recommend for "+escHtml(p.name)+".</b><p>I’ve prioritised "+need+" and used the catalogue’s eligibility and upper monthly prices to stay within "+money(cap)+".</p><div class='chat-result'><h4>Suggested bundle</h4>"+chosen.map(x=>"<p>✓ <b>"+escHtml(x.name)+"</b> · "+money(x.min)+"–"+money(x.max)+"/month</p>").join("")+"<p><b>Monthly estimate:</b> "+money(chosen.reduce((n,x)=>n+x.min,0))+"–"+money(total)+"</p></div><p>I’ve added these to your bundle builder. You can change quantities or remove products before creating a quote.</p><button class='chat-action' onclick='go(\"quote\")'>Review this bundle →</button><button class='chat-action' onclick='startBusinessEdit()'>Edit with assistant</button>";
- }
- return "I can help with connectivity, customer communication, cloud tools, security, verification and activation. What’s the biggest issue you want to solve first?";
 }
 function escHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function scoreProduct(x,goal){
