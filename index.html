@@ -242,26 +242,66 @@ function addChatMessage(role,html){const stream=$("chatStream"),wrap=document.cr
 function toggleAssistant(force){const w=$("assistantWidget"),open=typeof force==="boolean"?force:!w.classList.contains("open");w.classList.toggle("open",open);$("assistantLauncher").style.display=open?"none":"flex";if(open){setTimeout(()=>$("chatInput").focus(),100)}}
 function usePrompt(v){toggleAssistant(true);$("chatInput").value=v;sendCopilotMessage()}
 function clearChatInput(){$("chatInput").value="";$("chatInput").focus()}
-function resetCopilot(){if(!confirm("Start a new conversation? Your saved profile and quote will remain."))return;$("chatStream").innerHTML='<div class="chat-day">NEW CONVERSATION</div>';addChatMessage("assistant","<b>Of course. Let’s start fresh.</b><p>What kind of business do you run, and what would you like help with?</p>");copilotTurns=0}
+function resetCopilot(){if(!confirm("Start a new conversation? Your saved profile and quote will remain."))return;$("chatStream").innerHTML='<div class="chat-day">NEW CONVERSATION</div>';addChatMessage("assistant","<b>Of course. Let’s start fresh.</b><p>What kind of business do you run, and what would you like help with?</p>");copilotTurns=0;assistantHistory=[]}
 function renderCopilotContext(){if($("widgetContext"))$("widgetContext").textContent=state.profile?(state.profile.name+" · "+state.profile.city+" · "+state.profile.employees+" employees"):"Tell me what your business needs. I’ll help you find the right Airtel services.";if(!$("chatBizName"))return;const p=state.profile;$("chatBizName").textContent=p?.name||"Not set up yet";$("chatBizMeta").textContent=p?p.city+" · "+p.employees+" employees · "+p.sites+" site(s)":"Tell me about your business to begin.";$("chatStep1").textContent=p?"✓":"○";$("chatStep2").textContent=state.quote?"✓":"○";$("chatStep3").textContent=state.kyc?"✓":"○";$("chatStep4").textContent=state.order?.stage>=4?"✓":"○"}
-function sendCopilotMessage(){
+let assistantHistory=[];
+function classifyAssistantTask(message){
+ const t=message.toLowerCase();
+ if(/edit|change|update|modify|rename|correct/.test(t)&&/business|profile|city|employee|staff|budget|site|name|type|need/.test(t))return {kind:"edit",steps:[["Opening your business profile…","Identifying the detail you want to change"],["Checking the new value…","Making sure the update is valid"],["Updating your profile…","Refreshing related recommendations"]]};
+ if(/recommend|suggest|bundle|which service|what plan|best plan|product/.test(t))return {kind:"recommend",steps:[["Understanding your business need…","Matching your goals to the catalogue"],["Checking service eligibility…","Applying business, location and dependency rules"],["Comparing suitable options…","Preparing a recommendation with price ranges"]]};
+ if(/price|cost|quote|₹|rs\.?\s*\d|budget|cheaper|expensive/.test(t))return {kind:"pricing",steps:[["Reviewing your pricing question…","Identifying the services and budget involved"],["Checking catalogue price ranges…","Using listed prices, setup fees and terms"],["Preparing a cost breakdown…","Separating recurring and one-time costs"]]};
+ if(/kyc|gstin|udyam|verify|document|consent|registration/.test(t))return {kind:"kyc",steps:[["Reviewing verification requirements…","Identifying the registration or document question"],["Checking the onboarding rules…","Separating format checks from official verification"],["Preparing the next step…","Highlighting any human-review requirement"]]};
+ if(/track|status|activation|order|installation|progress/.test(t))return {kind:"tracking",steps:[["Reviewing onboarding status…","Checking the saved journey context"],["Finding the relevant milestone…","Identifying what is complete and what remains"],["Preparing your next action…","Summarising the next step"]]};
+ if(/error|not working|slow|failed|issue|problem|trouble|can't|cannot/.test(t))return {kind:"support",steps:[["Understanding the issue…","Identifying symptoms and what changed"],["Narrowing down possible causes…","Checking relevant service and setup context"],["Preparing troubleshooting steps…","Prioritising safe checks"]]};
+ return {kind:"general",steps:[["Reading your question…","Identifying what you need help with"],["Reviewing relevant business context…","Using the information available in your workspace"],["Preparing a clear answer…","Putting together the most useful next step"]]};
+}
+function renderAssistantLoader(task){
+ return '<div class="thinking-card task-'+task.kind+'"><div class="thinking-orb">✳</div><div class="thinking-copy"><div class="thinking-title">'+task.steps[0][0]+'</div><div class="thinking-sub">'+task.steps[0][1]+'</div><div class="thinking-steps">'+task.steps.map((st,i)=>'<div class="thinking-step '+(i===0?'current':'')+'"><span class="step-dot"></span>'+st[0].replace(/…/g,'')+'</div>').join('')+'</div><div class="thinking-bar"><span style="width:12%"></span></div></div></div>';
+}
+function assistantCatalogue(){
+ return PRODUCTS.map(x=>{const e=eligibility(x);return {sku:x.id,name:x.name,category:x.category,description:x.description,monthlyMin:x.min,monthlyMax:x.max,setupFee:x.setup,eligible:e.ok,reason:e.reason}});
+}
+function applyAssistantResult(result){
+ const updates=result.profile_updates||{},changed=[];
+ if(!state.profile)state.profile={tier:"2",sites:1,employees:0,segment:"prof",gstin:""};
+ const p=state.profile;
+ for(const key of ["name","type","city","employees","sites","budget","need"]){
+  const value=updates[key];if(value===null||value===undefined||value==="")continue;
+  if(["employees","sites","budget"].includes(key)){const n=Number(value);if(!Number.isFinite(n)||n<0||(key!=="budget"&&(!Number.isInteger(n)||n<1)))continue;p[key]=n}
+  else p[key]=String(value).slice(0,160);
+  changed.push(key);
+ }
+ if(changed.length){
+  if(changed.includes("type")){const v=String(p.type).toLowerCase();p.segment=/retail|shop|store/.test(v)?"micro":/manufactur|factory/.test(v)?"mfg":"prof"}
+  state.quote=null;state.kyc=null;state.order=null;state.passportId=null;state.selected={};persist();renderProducts();
+ }
+ const valid=new Set(PRODUCTS.filter(x=>eligibility(x).ok).map(x=>x.id));
+ const picks=(result.selected_skus||[]).filter(id=>valid.has(id));
+ if(picks.length){state.selected={};picks.forEach(id=>state.selected[id]=1);invalidateDownstream();persist();renderProducts()}
+ if(changed.length)businessEditField=null;
+ let answer=result.reply||"I couldn't prepare an answer. Please try again.";
+ if(result.navigation&&result.navigation!=="none")answer+="\n\nYou can continue in the "+({quote:"Bundle & quote",kyc:"Smart KYC",tracker:"Activation tracker",growth:"Growth cockpit",advisor:"Business advisor"}[result.navigation]||"workspace")+".";
+ if(picks.length)answer+="\n\nI've added "+picks.length+" eligible catalogue item(s) to your bundle. Review them before creating a quote.";
+ if(changed.length)answer+="\n\nYour business profile has been updated. Previous quote, KYC and activation data were reset so they can be recalculated.";
+ return answer;
+}
+async function sendCopilotMessage(){
  const input=$("chatInput"),msg=input.value.trim();if(!msg)return;
  addChatMessage("user",escHtml(msg).replace(/\n/g,"<br>"));input.value="";copilotTurns++;
- const bubble=addChatMessage("assistant",'<div class="thinking-card"><div class="thinking-orb">✳</div><div class="thinking-copy"><div class="thinking-title" id="thinkTitle">Understanding your business…</div><div class="thinking-sub" id="thinkSub">Reading your request and context</div><div class="thinking-steps"><div class="thinking-step current" id="think1"><span class="step-dot"></span> Understanding your requirements</div><div class="thinking-step" id="think2"><span class="step-dot"></span> Checking relevant catalogue options</div><div class="thinking-step" id="think3"><span class="step-dot"></span> Preparing a suitable plan</div></div><div class="thinking-bar"><span id="thinkBar"></span></div></div></div>');
- const stages=[
-  ["Understanding your requirements…","Identifying business type, needs and constraints"],
-  ["Checking catalogue options…","Applying product eligibility and budget rules"],
-  ["Putting your plan together…","Preparing a recommendation and next steps"]
- ];
- let step=0;
- const advance=()=>{
-  const prev=$("think"+(step+1));if(prev){prev.classList.remove("current");prev.classList.add("done")}
-  step++;
-  if(step<3){const next=$("think"+(step+1));if(next)next.classList.add("current");$("thinkTitle").textContent=stages[step][0];$("thinkSub").textContent=stages[step][1];$("thinkBar").style.width=((step+1)*33)+"%";setTimeout(advance,480)}
-  else{bubble.innerHTML=respondToBusiness(msg);renderCopilotContext();$("chatStream").scrollTop=$("chatStream").scrollHeight}
- };
- setTimeout(advance,480);
+ const task=classifyAssistantTask(msg),bubble=addChatMessage("assistant",renderAssistantLoader(task));
+ let stage=0;
+ const rotate=setInterval(()=>{stage=(stage+1)%task.steps.length;const title=bubble.querySelector(".thinking-title"),sub=bubble.querySelector(".thinking-sub"),steps=bubble.querySelectorAll(".thinking-step"),bar=bubble.querySelector(".thinking-bar span");if(title)title.textContent=task.steps[stage][0];if(sub)sub.textContent=task.steps[stage][1];steps.forEach((el,i)=>el.classList.toggle("current",i===stage));if(bar)bar.style.width=(18+stage*31)+"%"},1350);
  renderCopilotContext();
+ try{
+  const response=await fetch("/api/assistant/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+   message:msg,history:assistantHistory.slice(-10),business:state.profile||null,catalogue:assistantCatalogue(),editMode:!!businessEditField
+  })});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||"Assistant request failed");
+  const answer=applyAssistantResult(data.result||{});
+  assistantHistory.push({role:"user",content:msg},{role:"assistant",content:answer});
+  bubble.textContent=answer;bubble.style.whiteSpace="pre-line";
+ }catch(error){bubble.textContent=error.message||"I couldn't reach the assistant. Please try again.";bubble.classList.add("assistant-error")}
+ finally{clearInterval(rotate);renderCopilotContext();$("chatStream").scrollTop=$("chatStream").scrollHeight}
 }
 function respondToBusiness(msg){
  const edit=assistantEdit(msg);if(edit)return edit;
