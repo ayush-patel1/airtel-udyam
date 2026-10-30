@@ -217,6 +217,27 @@
  :lang(te) .welcome-body{font-size:14px;line-height:2;margin-bottom:28px}
  :lang(te) .welcome-trust{gap:9px;margin-top:36px;font-size:7px}
 }
+
+/* Balance the Telugu hero column vertically and use the full available height */
+@media(min-width:761px){
+ :lang(te) .welcome-main{align-items:stretch;padding-top:34px;padding-bottom:30px}
+ :lang(te) .welcome-copy{min-height:540px;display:flex;flex-direction:column;justify-content:space-between;max-width:650px;padding:8px 0 4px}
+ :lang(te) .welcome-eyebrow{margin:0}
+ :lang(te) .welcome-copy h1{margin:0;max-width:640px}
+ :lang(te) .welcome-lead{margin:0}
+ :lang(te) .welcome-body{margin:0;max-width:570px}
+ :lang(te) .welcome-enter{align-self:flex-start;margin:0}
+ :lang(te) .welcome-trust{margin:0;gap:clamp(14px,2vw,28px);width:100%;justify-content:flex-start}
+}
+@media(max-width:760px){
+ :lang(te) .welcome-main{align-items:start}
+ :lang(te) .welcome-copy{display:flex;flex-direction:column;gap:0}
+ :lang(te) .welcome-copy h1{margin-bottom:25px}
+ :lang(te) .welcome-lead{margin-bottom:15px}
+ :lang(te) .welcome-body{margin-bottom:28px}
+ :lang(te) .welcome-enter{align-self:flex-start}
+ :lang(te) .welcome-trust{margin-top:36px;justify-content:space-between}
+}
 </style></head><body>
 <section id="welcomeGate" class="welcome-gate">
   <div class="welcome-nav"><div class="welcome-brand"><img src="https://s3-ap-southeast-1.amazonaws.com/bsy/iportal/images/airtel-logo-red-text-horizontal.jpg" alt="Airtel" width="104" height="42"><span>AIRTEL BUSINESS<br><small>UDYAM ONESHOT</small></span></div><div class="welcome-controls"><span class="welcome-live"><i></i> BUSINESS, IN MOTION</span><select id="welcomeLanguage" aria-label="Website language" onchange="setAssistantLanguage(this.value)"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">हिन्दी</option><option value="hi-Latn">Hinglish</option><option value="bn">বাংলা</option><option value="mr">मराठी</option><option value="ta">தமிழ்</option><option value="te">తెలుగు</option><option value="gu">ગુજરાતી</option><option value="kn">ಕನ್ನಡ</option><option value="ml">മലയാളം</option><option value="pa">ਪੰਜਾਬੀ</option></select></div></div>
