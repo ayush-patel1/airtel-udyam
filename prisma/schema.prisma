@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  REVIEWER
+  SALES
+  OPERATIONS
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  NEEDS_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum OrderStatus {
+  DRAFT
+  QUOTED
+  KYC_PENDING
+  UNDER_REVIEW
+  APPROVED
+  PROVISIONING
+  ACTIVE
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(SALES)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  auditEvents  AuditEvent[]
+}
+
+model Business {
+  id             String   @id @default(cuid())
+  name           String
+  phone          String?
+  email          String?
+  preferredLang  String   @default("en")
+  segment        String?
+  city           String?
+  cityTier       String?
+  gstin          String?
+  udyamNumber    String?
+  consentAt      DateTime?
+  consentPurpose String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  quotes         Quote[]
+  documents      KycDocument[]
+  orders         Order[]
+  messages       Message[]
+  @@index([phone])
+  @@index([gstin])
+  @@index([udyamNumber])
+}
+
+model Quote {
+  id             String   @id @default(cuid())
+  quoteNumber    String   @unique
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id])
+  items          Json
+  monthlyMin     Decimal  @db.Decimal(12,2)
+  monthlyMax     Decimal  @db.Decimal(12,2)
+  setupTotal     Decimal  @db.Decimal(12,2)
+  contractMonths Int?
+  ruleVersion    String
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  orders         Order[]
+  @@index([businessId, createdAt])
+}
+
+model KycDocument {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id])
+  documentType   String
+  storageKey     String    @unique
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String?
+  extractedData  Json?
+  reviewStatus   KycStatus @default(PENDING)
+  reviewerId     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  @@index([businessId, reviewStatus])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String      @unique
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id])
+  quoteId     String
+  quote       Quote       @relation(fields: [quoteId], references: [id])
+  status      OrderStatus @default(DRAFT)
+  externalRef String?
+  milestones  Json
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  @@index([businessId, status])
+}
+
+model Consent {
+  id          String   @id @default(cuid())
+  businessId  String
+  purpose     String
+  channel     String
+  version     String
+  granted     Boolean
+  evidence    Json?
+  createdAt   DateTime @default(now())
+  @@index([businessId, purpose, createdAt])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  ipAddress   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  businessId     String?
+  business       Business? @relation(fields: [businessId], references: [id])
+  channel        String
+  direction      String
+  providerId     String?  @unique
+  fromAddress    String
+  toAddress      String
+  body           String?
+  payload        Json?
+  status         String   @default("RECEIVED")
+  language       String?
+  createdAt      DateTime @default(now())
+  @@index([fromAddress, createdAt])
+}
+
+model IntegrationEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventKey    String   @unique
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  @@index([provider, createdAt])
+}
