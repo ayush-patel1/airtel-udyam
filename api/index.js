@@ -4,14 +4,14 @@ import helmet from "helmet";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
-import { PrismaClient } from "@prisma/client";
+import { createFirebaseStore } from "./lib/firebase-store.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
 import { randomUUID, createHash, timingSafeEqual } from "node:crypto";
 
 const app = express();
-const prisma = new PrismaClient();
+const prisma = createFirebaseStore();
 const jsonParser = express.json({ limit: "1mb" });
 app.set("trust proxy", 1);
 app.use(helmet());
@@ -66,7 +66,7 @@ const quoteSchema = z.object({
 
 // Health and service readiness
 app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:new Date().toISOString(),integrations:{llm:Boolean(process.env.GEMINI_API_KEY),
-  database:Boolean(process.env.DATABASE_URL),whatsapp:Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
+  database:Boolean(process.env.FIREBASE_DATABASE_URL && process.env.FIREBASE_SERVICE_ACCOUNT_JSON),whatsapp:Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
   storage:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION)
 }}));
 
@@ -313,7 +313,7 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
 }));
 
 // Integration status, reviewer queue and audit access
-app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.DATABASE_URL),llm:Boolean(process.env.GEMINI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
+app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.FIREBASE_DATABASE_URL && process.env.FIREBASE_SERVICE_ACCOUNT_JSON),llm:Boolean(process.env.GEMINI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
 app.get("/api/admin/audit",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
   const events=await prisma.auditEvent.findMany({orderBy:{createdAt:"desc"},take:Math.min(Number(req.query.limit)||100,500),include:{actor:{select:{name:true,email:true,role:true}}}});
   res.json({events});
