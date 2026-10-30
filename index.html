@@ -298,8 +298,7 @@ function applyAssistantResult(result){
 }
 async function sendCopilotMessage(){
  const input=$("chatInput"),msg=input.value.trim();if(!msg)return;
- addChatMessage("user",escHtml(msg).replace(/
-/g,"<br>"));input.value="";copilotTurns++;
+ addChatMessage("user",escHtml(msg).replace(/\n/g,"<br>"));input.value="";copilotTurns++;
  const task=classifyAssistantTask(msg),bubble=addChatMessage("assistant",renderAssistantLoader(task));
  let stage=0;
  const rotate=setInterval(()=>{stage=(stage+1)%task.steps.length;const title=bubble.querySelector(".thinking-title"),sub=bubble.querySelector(".thinking-sub"),steps=bubble.querySelectorAll(".thinking-step"),bar=bubble.querySelector(".thinking-bar span");if(title)title.textContent=task.steps[stage][0];if(sub)sub.textContent=task.steps[stage][1];steps.forEach((el,i)=>el.classList.toggle("current",i===stage));if(bar)bar.style.width=(18+stage*31)+"%"},1350);
