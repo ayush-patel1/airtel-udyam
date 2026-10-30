@@ -109,12 +109,22 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   ].join("\n");
   const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue,editMode:input.editMode,history:input.history,message:input.message});
   const model=process.env.GEMINI_MODEL||"gemini-3.8-flash";
-  const upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
-      contents:[{role:"user",parts:[{text:context}]}],
-      generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:900,temperature:0.3}})
-  });
+  let upstream;
+  try {
+    upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      signal:AbortSignal.timeout(50000),
+      body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
+        contents:[{role:"user",parts:[{text:context}]}],
+        generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:650,temperature:0.3}})
+    });
+  } catch(error) {
+    if(error.name==="TimeoutError" || error.name==="AbortError") {
+      console.error("Gemini assistant request timed out");
+      return res.status(504).json({error:"The assistant is taking longer than expected. Please try again."});
+    }
+    throw error;
+  }
   const payload=await upstream.json();
   if(!upstream.ok){console.error("Gemini assistant error",upstream.status,payload?.error?.status||"provider_error",payload?.error?.message||"");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again.",providerStatus:upstream.status});}
   const raw=payload.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("").trim();
