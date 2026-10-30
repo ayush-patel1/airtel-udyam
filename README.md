@@ -31,3 +31,15 @@ The repository is connected to Vercel. Pushes to `main` create a production depl
 The repository now includes a Vercel serverless API, PostgreSQL/Prisma data model, JWT authentication, role-based reviewer/admin endpoints, audit events, consent records, quote/order APIs, private S3 pre-signed KYC uploads, AWS Textract OCR extraction, and a WhatsApp Cloud API webhook + outbound messaging endpoint.
 
 See [API setup and integration guide](api/README.md) and [.env.example](.env.example). The backend is a deployable integration foundation, not yet a live Airtel production integration: provision PostgreSQL, AWS resources, Meta WhatsApp Business credentials and authorized Airtel API credentials, then configure Vercel environment variables and run the Prisma migration. OCR is extraction only and requires human verification. A durable background queue, WhatsApp template dispatch, Meta webhook signature verification, rate limiting, monitoring and full end-to-end tests remain production hardening tasks.
+
+
+## Growth Cockpit
+
+The Growth Cockpit adds:
+- Explainable Essential / Growth / Complete bundle options constrained by the catalogue eligibility rules and a monthly budget.
+- A business-value simulator for user-entered savings, incremental gross profit, monthly service cost and setup payback.
+- WhatsApp-ready quote, KYC, activation and follow-up message previews with a click-to-open WhatsApp draft.
+- A conversion control tower prioritising quote transparency, quote simplicity, follow-up speed and KYC completion using the supplied synthetic funnel.
+- A Bundle Passport decision trace across profile, quote, KYC and order status.
+
+All optimiser recommendations are deterministic catalogue heuristics, not an AI claim. ROI is scenario modelling from user-entered assumptions, not a guaranteed outcome. WhatsApp draft links do not send messages through the Cloud API; live delivery requires Meta credentials, valid opt-in, approved templates where applicable, and the configured backend.
