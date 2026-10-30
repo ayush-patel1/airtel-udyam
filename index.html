@@ -238,6 +238,18 @@
  :lang(te) .welcome-enter{align-self:flex-start}
  :lang(te) .welcome-trust{margin-top:36px;justify-content:space-between}
 }
+
+/* Keep the complete MSME illustration in frame, with balanced breathing room */
+.welcome-stage.msme-stage{width:100%;min-width:0;overflow:visible;padding:12px 8px;box-sizing:border-box}
+.msme-scene{width:100%;max-width:520px;box-sizing:border-box;margin-inline:auto;padding:18px 14px 14px;overflow:hidden}
+.msme-illustration{width:90%;max-width:470px;margin:8px auto 2px;overflow:visible}
+.scene-caption{padding:2px 18px 7px;justify-content:center;flex-wrap:wrap}
+.scene-caption i{margin-left:auto}
+@media(max-width:760px){
+ .welcome-stage.msme-stage{width:100%;min-width:0;padding:10px 0 25px}
+ .msme-scene{width:calc(100% - 18px);max-width:500px;padding:14px 10px 12px}
+ .msme-illustration{width:94%;max-width:450px}
+}
 </style></head><body>
 <section id="welcomeGate" class="welcome-gate">
   <div class="welcome-nav"><div class="welcome-brand"><img src="https://s3-ap-southeast-1.amazonaws.com/bsy/iportal/images/airtel-logo-red-text-horizontal.jpg" alt="Airtel" width="104" height="42"><span>AIRTEL BUSINESS<br><small>UDYAM ONESHOT</small></span></div><div class="welcome-controls"><span class="welcome-live"><i></i> BUSINESS, IN MOTION</span><select id="welcomeLanguage" aria-label="Website language" onchange="setAssistantLanguage(this.value)"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">हिन्दी</option><option value="hi-Latn">Hinglish</option><option value="bn">বাংলা</option><option value="mr">मराठी</option><option value="ta">தமிழ்</option><option value="te">తెలుగు</option><option value="gu">ગુજરાતી</option><option value="kn">ಕನ್ನಡ</option><option value="ml">മലയാളം</option><option value="pa">ਪੰਜਾਬੀ</option></select></div></div>
