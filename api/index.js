@@ -65,7 +65,7 @@ const quoteSchema = z.object({
 });
 
 // Health and service readiness
-app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:new Date().toISOString(),integrations:{llm:Boolean(process.env.OPENAI_API_KEY),
+app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:new Date().toISOString(),integrations:{llm:Boolean(process.env.GEMINI_API_KEY),
   database:Boolean(process.env.DATABASE_URL),whatsapp:Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
   storage:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION)
 }}));
@@ -85,7 +85,7 @@ const assistantOutputSchema={
   },required:["reply","profile_updates","selected_skus","navigation"]
 };
 app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
-  if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:"AI assistant is not configured. Add OPENAI_API_KEY in Vercel project environment variables."});
+  if(!process.env.GEMINI_API_KEY)return res.status(503).json({error:"AI assistant is not configured. Add GEMINI_API_KEY in Vercel project environment variables."});
   const input=validate(z.object({
     message:z.string().trim().min(1).max(4000),
     history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
@@ -108,21 +108,21 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     "Return valid structured data. reply is plain text with concise paragraphs; no HTML. selected_skus must contain only catalogue SKUs. navigation should be quote, kyc, tracker or growth only when a clear next-step screen is useful."
   ].join("\n");
   const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue,editMode:input.editMode,history:input.history,message:input.message});
-  const upstream=await fetch("https://api.openai.com/v1/responses",{
-    method:"POST",headers:{Authorization:"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},
-    body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-5.5",store:false,instructions,
-      input:[{role:"user",content:[{type:"input_text",text:context}]}],
-      text:{format:{type:"json_schema",name:"udyam_assistant_reply",strict:true,schema:assistantOutputSchema}},
-      max_output_tokens:900})
+  const model=process.env.GEMINI_MODEL||"gemini-2.5-flash";
+  const upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
+      contents:[{role:"user",parts:[{text:context}]}],
+      generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:900,temperature:0.3}})
   });
   const payload=await upstream.json();
-  if(!upstream.ok){console.error("OpenAI assistant error",upstream.status,payload?.error?.code||payload?.error?.type||"provider_error");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again."});}
-  const raw=(payload.output||[]).flatMap(item=>item.content||[]).find(part=>part.type==="output_text")?.text;
+  if(!upstream.ok){console.error("Gemini assistant error",upstream.status,payload?.error?.status||"provider_error");return res.status(502).json({error:"The AI assistant could not complete this request. Please try again."});}
+  const raw=payload.candidates?.[0]?.content?.parts?.map(part=>part.text||"").join("").trim();
   if(!raw)return res.status(502).json({error:"The AI assistant returned an empty response. Please try again."});
   let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"The AI assistant returned an unreadable response. Please try again."});}
   const allowed=new Set(input.catalogue.filter(x=>x.eligible).map(x=>x.sku));
   result.selected_skus=(result.selected_skus||[]).filter(sku=>allowed.has(sku));
-  res.json({result,model:process.env.OPENAI_MODEL||"gpt-5.5"});
+  res.json({result,model:process.env.GEMINI_MODEL||"gemini-2.5-flash"});
 }));
 
 // Bootstrap is intentionally disabled in production. Create the first ADMIN through a one-time secure script.
@@ -280,7 +280,7 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
 }));
 
 // Integration status, reviewer queue and audit access
-app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.DATABASE_URL),llm:Boolean(process.env.OPENAI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
+app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.DATABASE_URL),llm:Boolean(process.env.GEMINI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
 app.get("/api/admin/audit",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
   const events=await prisma.auditEvent.findMany({orderBy:{createdAt:"desc"},take:Math.min(Number(req.query.limit)||100,500),include:{actor:{select:{name:true,email:true,role:true}}}});
   res.json({events});
