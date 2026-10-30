@@ -129,7 +129,31 @@
 .widget-suggestions{margin:10px 0 12px 32px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}.widget-suggestions button{font-size:9px;padding:8px 10px;border-radius:8px}
 .widget-compose{padding:10px;border-top:1px solid #eff0f3;flex:0 0 auto}.widget-compose .compose-box{padding:6px 7px 6px 10px}.widget-compose textarea{font-size:10px;min-height:36px}.widget-compose .send-btn{width:33px;height:33px}.widget-compose .chat-disclaimer{font-size:8px}
 @media(max-width:500px){.assistant-launcher{right:15px;bottom:15px}.assistant-widget{right:10px;bottom:75px;width:calc(100vw - 20px);height:min(620px,calc(100dvh - 95px))}}
-.mobile-menu-toggle{display:none}\n</style></head><body>
+
+/* Robot companion polish */
+.assistant-launcher{gap:11px;padding:8px 17px 8px 8px;border-radius:18px 24px 24px 24px;min-height:58px;isolation:isolate;overflow:visible}
+.assistant-launcher:before{content:"";position:absolute;inset:-6px;border:1px solid #e31b3638;border-radius:24px;z-index:-1;animation:botHalo 2.8s ease-out infinite}
+.assistant-launcher:after{content:"";position:absolute;right:calc(100% + 12px);top:50%;transform:translateY(-50%);border:1px solid #f1dce0;background:#fff;color:#596477;border-radius:10px;padding:8px 11px;white-space:nowrap;font-size:10px;font-weight:600;box-shadow:0 5px 18px #202a3912;opacity:0;pointer-events:none;transition:.2s}
+.assistant-launcher:hover:after{content:"Hi! Need help with your business?";opacity:1}
+.launcher-copy{display:flex;flex-direction:column;gap:2px;text-align:left;padding-right:2px}
+.launcher-copy b{font:700 11px Manrope;letter-spacing:.1px}
+.launcher-copy small{font-size:9px;color:#ffe1e5;font-weight:500}
+.launcher-spark{width:42px;height:42px;flex-basis:42px;box-shadow:0 3px 12px #8e102322}
+.robot-face{width:25px;height:21px;border-radius:8px;box-shadow:inset 0 -3px 0 #fff0f2}
+.robot-face:before{height:7px;top:-9px;left:10px}
+.robot-face:after{top:-11px;left:8px;width:7px}
+.robot-face .robot-eye{animation:robotBlink 4.8s infinite;transform-origin:center}
+.robot-face .robot-eye:nth-child(2){animation-delay:.08s}
+.robot-mouth{width:8px;left:7px;height:2px}
+.widget-mark{background:linear-gradient(145deg,#fff0f2,#ffe2e7);box-shadow:inset 0 0 0 1px #f8d4da}
+.widget-brand b{font-size:13px}
+.widget-head{background:linear-gradient(100deg,#fff 0%,#fff8f9 100%)}
+@keyframes botHalo{0%{transform:scale(.96);opacity:.8}75%,100%{transform:scale(1.12);opacity:0}}
+@keyframes robotBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.12)}}
+@media(hover:hover){.assistant-launcher:hover .launcher-spark{transform:rotate(-7deg) translateY(-1px)}}
+@media(prefers-reduced-motion:reduce){.assistant-launcher:before,.robot-face .robot-eye{animation:none!important}.assistant-launcher,.launcher-spark{transition:none}}
+@media(max-width:500px){.assistant-launcher{right:14px;bottom:14px;min-height:54px;padding:7px 14px 7px 7px}.launcher-spark{width:40px;height:40px;flex-basis:40px}.assistant-launcher:after{display:none}}
+\n.mobile-menu-toggle{display:none}\n</style></head><body>
 <div class="shell"><aside class="side"><div class="brand"><img src="https://s3-ap-southeast-1.amazonaws.com/bsy/iportal/images/airtel-logo-red-text-horizontal.jpg" alt="Airtel"><div><small>BUSINESS · UDYAM ONESHOT</small></div></div><button class="mobile-menu-toggle" id="mobileMenuToggle" onclick="toggleMobileMenu()" aria-label="Open navigation menu" aria-expanded="false"><span></span><span></span><span></span></button><div class="workspace"><span class="dot"></span> Demo workspace · Saved on this device</div><div class="navlabel">WORKSPACE</div><nav class="nav">
 <button class="active" data-view="assistant"><span class="navicon">✳</span> Udyam assistant</button><button data-view="overview"><span class="navicon">▦</span> Overview</button><button data-view="advisor"><span class="navicon">✳</span> Business advisor</button><button data-view="quote"><span class="navicon">▤</span> Bundle & quote</button><button data-view="kyc"><span class="navicon">▣</span> Smart KYC</button><button data-view="tracker"><span class="navicon">◷</span> Activation tracker</button><button data-view="insights"><span class="navicon">▥</span> Insights</button><button data-view="growth"><span class="navicon">✦</span> Growth cockpit</button></nav><div class="sidefoot"><b>Prototype environment</b><br>Catalogue and registry checks use supplied synthetic case data. No live Airtel or government systems are connected.</div></aside>
 <main><header class="top"><div class="crumb">Workspace &nbsp;/&nbsp; <b id="crumb">Udyam assistant</b></div><div class="topright"><span class="demo">SYNTHETIC DATA DEMO</span><div class="avatar">SM</div></div></header><div class="content">
@@ -307,7 +331,7 @@ function renderGrowthPassport(){
 }
 
 restore();renderPassport();renderTracker();renderProducts();updateRegistryStatus();renderGrowthPassport();renderCopilotContext();
-</script><button id="assistantLauncher" class="assistant-launcher" onclick="toggleAssistant()" aria-label="Chat with Udyam Assistant"><span class="launcher-spark"><span class="robot-face"><i class="robot-eye"></i><i class="robot-eye"></i><i class="robot-mouth"></i></span></span><span class="launcher-label">Ask Udyam</span><span class="launcher-dot"></span></button>
+</script><button id="assistantLauncher" class="assistant-launcher" onclick="toggleAssistant()" aria-label="Chat with Udyam Assistant"><span class="launcher-spark"><span class="robot-face"><i class="robot-eye"></i><i class="robot-eye"></i><i class="robot-mouth"></i></span></span><span class="launcher-copy"><b>Ask Udyam</b><small>Your business helper</small></span><span class="launcher-dot"></span></button>
 <div id="assistantWidget" class="assistant-widget" aria-label="Udyam Assistant chat">
  <div class="widget-head"><div class="widget-brand"><div class="widget-mark"><span class="robot-face"><i class="robot-eye"></i><i class="robot-eye"></i><i class="robot-mouth"></i></span></div><div><b>Udyam Assistant</b><small><i></i> Here to help your business</small></div></div><div class="widget-controls"><button onclick="toggleAssistant(false)" aria-label="Minimise chat">−</button><button onclick="toggleAssistant(false)" aria-label="Close chat">×</button></div></div>
  <div class="widget-context" id="widgetContext">Tell me what your business needs. I’ll help you find the right Airtel services.</div>
