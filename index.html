@@ -292,12 +292,8 @@ function applyAssistantResult(result){
  if(changed.length)businessEditField=null;
  let answer=result.reply||"I couldn't prepare an answer. Please try again.";
  if(result.navigation&&result.navigation!=="none")answer+="\n\nYou can continue in the "+({quote:"Bundle & quote",kyc:"Smart KYC",tracker:"Activation tracker",growth:"Growth cockpit",advisor:"Business advisor"}[result.navigation]||"workspace")+".";
- if(picks.length)answer+="
-
-I've added "+picks.length+" eligible catalogue item(s) to your bundle. Review them before creating a quote.";
- if(changed.length)answer+="
-
-Your business profile has been updated. Previous quote, KYC and activation data were reset so they can be recalculated.";
+ if(picks.length)answer+="\n\nI've added "+picks.length+" eligible catalogue item(s) to your bundle. Review them before creating a quote.";
+ if(changed.length)answer+="\n\nYour business profile has been updated. Previous quote, KYC and activation data were reset so they can be recalculated.";
  return answer;
 }
 async function sendCopilotMessage(){
