@@ -4,7 +4,7 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 
 ## Required environment variables
 
-- `DATABASE_URL` — PostgreSQL connection string (use a managed Postgres provider; enable TLS).
+- `FIREBASE_DATABASE_URL` — Firebase Realtime Database URL.\n- `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase Admin service-account JSON (server-side only). `FIREBASE_SERVICE_ACCOUNT_JSON` is also accepted.
 - `JWT_SECRET` — random secret, minimum 32 characters.
 - `CORS_ORIGINS` — comma-separated allowed frontend origins.
 - `AWS_REGION`, `AWS_S3_BUCKET` — private S3 bucket for KYC documents. Configure KMS encryption, block public access, lifecycle/retention and least-privilege IAM.
@@ -14,7 +14,7 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 
 ## Setup
 
-1. Provision PostgreSQL and set `DATABASE_URL`.
+1. Provision Firebase Realtime Database and set `DATABASE_URL`.
 2. Run `npm install`, then `npm run db:generate` and `npm run db:migrate`.
 3. Create the first ADMIN account using a secure, one-time provisioning script (do not expose public signup).
 4. Configure the environment variables in Vercel Project Settings.
