@@ -66,7 +66,7 @@ const quoteSchema = z.object({
 
 // Health and service readiness
 app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:new Date().toISOString(),integrations:{llm:Boolean(process.env.GEMINI_API_KEY),
-  database:Boolean(process.env.FIREBASE_DATABASE_URL && process.env.FIREBASE_SERVICE_ACCOUNT_JSON),whatsapp:Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
+  database:Boolean(process.env.FIREBASE_DATABASE_URL && (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_BASE64)),whatsapp:Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
   storage:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION)
 }}));
 
