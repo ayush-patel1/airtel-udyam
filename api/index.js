@@ -313,7 +313,7 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
 }));
 
 // Integration status, reviewer queue and audit access
-app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.FIREBASE_DATABASE_URL && process.env.FIREBASE_SERVICE_ACCOUNT_JSON),llm:Boolean(process.env.GEMINI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
+app.get("/api/admin/integrations",auth,allow("ADMIN"),(req,res)=>res.json({whatsapp:Boolean(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID&&process.env.WHATSAPP_VERIFY_TOKEN),s3:Boolean(process.env.AWS_S3_BUCKET),ocr:Boolean(process.env.AWS_REGION),database:Boolean(process.env.FIREBASE_DATABASE_URL && (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_BASE64)),llm:Boolean(process.env.GEMINI_API_KEY),airtelApis:Boolean(process.env.AIRTEL_API_BASE_URL&&process.env.AIRTEL_API_TOKEN)}));
 app.get("/api/admin/audit",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
   const events=await prisma.auditEvent.findMany({orderBy:{createdAt:"desc"},take:Math.min(Number(req.query.limit)||100,500),include:{actor:{select:{name:true,email:true,role:true}}}});
   res.json({events});
