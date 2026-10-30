@@ -51,9 +51,8 @@ const relations={
   auditEvent:{actor:["users","id","actorId"]}
 };
 export function createFirebaseStore(){
-  const db=getFirebaseDatabase();
   const names={user:"users",business:"businesses",quote:"quotes",kycDocument:"kycDocuments",order:"orders",consent:"consents",auditEvent:"auditEvents",message:"messages",integrationEvent:"integrationEvents"};
-  const refFor=model=>db.ref(names[model]);
+  const refFor=model=>getFirebaseDatabase().ref(names[model]);
   const all=async model=>{
     const snap=await refFor(model).get(),value=snap.val()||{};
     return Object.entries(value).map(([id,row])=>({id,...row}));
