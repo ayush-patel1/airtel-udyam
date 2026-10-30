@@ -296,7 +296,7 @@ async function sendCopilotMessage(){
   const response=await fetch("/api/assistant/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
    message:msg,history:assistantHistory.slice(-10),business:state.profile?{name:state.profile.name,type:state.profile.type,segment:state.profile.segment,city:state.profile.city,tier:state.profile.tier,employees:state.profile.employees,sites:state.profile.sites,budget:state.profile.budget,need:state.profile.need}:null,catalogue:assistantCatalogue(),editMode:!!businessEditField
   })});
-  const data=await response.json();if(!response.ok)throw new Error(data.error||"Assistant request failed");
+  const raw=await response.text();let data;try{data=JSON.parse(raw)}catch{console.error("Assistant API returned non-JSON",response.status,raw.slice(0,500));throw new Error(response.status>=500?"The assistant server is temporarily unavailable. Please try again in a moment.":"The assistant returned an unexpected response. Please refresh and try again.")}if(!response.ok)throw new Error(data.error||"Assistant request failed");
   const answer=applyAssistantResult(data.result||{});
   assistantHistory.push({role:"user",content:msg},{role:"assistant",content:answer});
   bubble.textContent=answer;bubble.style.whiteSpace="pre-line";
