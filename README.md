@@ -24,3 +24,10 @@ This is a static web app. Open `index.html` in a browser or serve the repository
 
 ## Deployment
 The repository is connected to Vercel. Pushes to `main` create a production deployment.
+
+
+## Backend foundation (new)
+
+The repository now includes a Vercel serverless API, PostgreSQL/Prisma data model, JWT authentication, role-based reviewer/admin endpoints, audit events, consent records, quote/order APIs, private S3 pre-signed KYC uploads, AWS Textract OCR extraction, and a WhatsApp Cloud API webhook + outbound messaging endpoint.
+
+See [API setup and integration guide](api/README.md) and [.env.example](.env.example). The backend is a deployable integration foundation, not yet a live Airtel production integration: provision PostgreSQL, AWS resources, Meta WhatsApp Business credentials and authorized Airtel API credentials, then configure Vercel environment variables and run the Prisma migration. OCR is extraction only and requires human verification. A durable background queue, WhatsApp template dispatch, Meta webhook signature verification, rate limiting, monitoring and full end-to-end tests remain production hardening tasks.
