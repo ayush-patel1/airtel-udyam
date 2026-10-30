@@ -136,7 +136,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   try {
     upstream=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
-      signal:AbortSignal.timeout(50000),
+      signal:AbortSignal.timeout(18000),
       body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
         contents:[{role:"user",parts:[{text:context}]}],
         generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:420,temperature:0.2}})
