@@ -1,20 +1,26 @@
-# Udyam OneShot
+# Airtel Business — Udyam OneShot
 
-Airtel Business MSME onboarding concept prototype for the Airtel SYNC YTL Hackathon.
+A responsive end-to-end onboarding prototype for the Airtel SYNC / YTL Track A MSME case.
 
-## Live demo deployment
-This repository is configured as a static site for Vercel. Connect/import this repository in Vercel with the **Other** framework preset, no build command, and the repository root as the output directory. Once Git integration is connected, pushes to `main` trigger deployments automatically.
+## Run
+This is a static web app. Open `index.html` in a browser or serve the repository root with any static server. No build command or environment variables are required.
 
-## Demo modules
-- Overview: supplied synthetic dataset funnel and drop-off insights.
-- Business Advisor: profile-based starter recommendation.
-- Bundle & Quote: selectable services and itemised illustrative pricing.
-- Smart KYC: consent-led mock registry demonstration with manual-review behavior.
-- Activation Tracker: simulated Bundle Passport and milestone progression.
-- Insights: synthetic dataset metrics and segment-level hypotheses.
+## Product journey
+1. **Business advisor** — capture business type, segment, city tier, team size, locations, budget, connectivity need and optional GSTIN.
+2. **Bundle & quote** — browse the 25-row supplied product catalogue; apply city-tier, employee, site, GSTIN and dependency checks; select quantities; calculate monthly price ranges, setup fees and contract term.
+3. **Bundle Passport** — create a traceable local quote/passport ID and export a CSV summary.
+4. **Smart KYC** — record consent, select supporting files locally, check identifier formats and look up mock registry entries. Optional GSTIN and Udyam CSV imports allow the complete supplied synthetic registry files to be checked in the browser.
+5. **Activation tracker** — advance a simulated order through business profile, bundle, KYC, operations/serviceability review and installation/activation milestones.
+6. **Insights** — show the synthetic case baseline and observed funnel / segment metrics.
 
-## Important limitations
-All records and integrations in this prototype are simulated. It does not connect to live Airtel, GST, Udyam, CRM, payments, or installation systems. The KYC flow is not OCR or identity verification. Prices are illustrative and must be validated against an authorised catalogue before any customer commitment. Dataset metrics describe the fictional hackathon dataset, not actual Airtel performance.
+## Data and privacy
+- Product catalogue rules and price ranges are based on the supplied synthetic case catalogue.
+- The dashboard metrics are based on the supplied synthetic case dataset. They are not actual Airtel customer performance.
+- The embedded registry examples are only a small sample. Import the supplied `mock_gstin_registry.csv` and `mock_udyam_registry.csv` from the Smart KYC screen to query the full synthetic registries.
+- Business profile, quote, KYC check result, order state and imported registry data are stored in the current browser's localStorage.
+- Uploaded documents are selected locally; file bytes are not sent to a server or persisted by this static prototype.
+- GSTIN/Udyam lookups are mock-data checks only. Format checks do not prove identity, registration authenticity, ownership or serviceability.
+- OCR, human review queues, real consent records, payment, inventory, CRM, Airtel order management, notifications and live government integrations are not connected. Do not use this prototype for real customer onboarding or operational decisions.
 
-## Technology
-Single-page HTML, CSS and JavaScript. No build step or package installation required.
+## Deployment
+The repository is connected to Vercel. Pushes to `main` create a production deployment.
