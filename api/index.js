@@ -91,13 +91,14 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
     business:z.record(z.string(),z.unknown()).optional(),
     catalogue:z.array(z.object({sku:z.string(),name:z.string(),category:z.string(),description:z.string().optional(),monthlyMin:z.number(),monthlyMax:z.number(),setupFee:z.number(),eligible:z.boolean(),reason:z.string().optional()})).max(40).default([]),
-    editMode:z.boolean().default(false)
+    editMode:z.boolean().default(false),language:z.enum(["auto","en","hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]).default("auto")
   }),req.body);
   const now=Date.now(),key=req.ip||"unknown",recent=(assistantRequests.get(key)||[]).filter(t=>now-t<60000);
   if(recent.length>=12)return res.status(429).json({error:"Please wait a moment before sending another message."});
   recent.push(now);assistantRequests.set(key,recent);
   const instructions=[
     "You are Udyam Assistant for Airtel Business, helping Indian MSMEs with onboarding and digital services.",
+    "Reply in the selected language: "+(input.language==="auto"?"detect the latest user message and reply in that language; use natural Hinglish for mixed Hindi-English":input.language==="hi-Latn"?"natural Roman-script Hinglish":({en:"English",hi:"Hindi",bn:"Bengali",mr:"Marathi",ta:"Tamil",te:"Telugu",gu:"Gujarati",kn:"Kannada",ml:"Malayalam",pa:"Punjabi"}[input.language]||"English"))+". Keep product names and SKU identifiers unchanged.",
     "Be conversational, specific, concise and context-aware. Answer the actual question; do not force every query into a product recommendation.",
     "Use INR for prices. Never invent catalogue prices, eligibility, Airtel coverage, government verification, order status or integration status.",
     "The supplied catalogue includes server-calculated eligibility. Recommend only entries marked eligible=true. Use their SKU values in selected_skus. Never calculate or alter prices.",
@@ -107,7 +108,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     "Do not claim that a recommendation, quote, KYC check, message or order has been executed unless the application context confirms it.",
     "Return valid structured data. reply is plain text with concise paragraphs; no HTML. selected_skus must contain only catalogue SKUs. navigation should be quote, kyc, tracker or growth only when a clear next-step screen is useful."
   ].join("\n");
-  const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue,editMode:input.editMode,history:input.history,message:input.message});
+  const context=JSON.stringify({business:input.business||null,catalogue:input.catalogue.filter(x=>x.eligible),editMode:input.editMode,history:input.history.slice(-6),message:input.message});
   const model=process.env.GEMINI_MODEL||"gemini-3.8-flash";
   let upstream;
   try {
@@ -116,7 +117,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
       signal:AbortSignal.timeout(50000),
       body:JSON.stringify({systemInstruction:{parts:[{text:instructions}]},
         contents:[{role:"user",parts:[{text:context}]}],
-        generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:650,temperature:0.3}})
+        generationConfig:{responseMimeType:"application/json",responseSchema:assistantOutputSchema,maxOutputTokens:420,temperature:0.2}})
     });
   } catch(error) {
     if(error.name==="TimeoutError" || error.name==="AbortError") {
