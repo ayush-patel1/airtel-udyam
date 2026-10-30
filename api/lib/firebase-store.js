@@ -7,9 +7,10 @@ export function getFirebaseDatabase(){
   if(database)return database;
   const databaseURL=process.env.FIREBASE_DATABASE_URL;
   const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if(!databaseURL||!raw)throw new Error("Firebase is not configured. Set FIREBASE_DATABASE_URL and FIREBASE_SERVICE_ACCOUNT_JSON.");
+  const encoded=process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  if(!databaseURL||(!raw&&!encoded))throw new Error("Firebase is not configured. Set FIREBASE_DATABASE_URL and FIREBASE_SERVICE_ACCOUNT_BASE64 (or FIREBASE_SERVICE_ACCOUNT_JSON).");
   let serviceAccount;
-  try{serviceAccount=JSON.parse(raw)}catch{throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON must contain valid service-account JSON.");}
+  try{serviceAccount=JSON.parse(encoded?Buffer.from(encoded,"base64").toString("utf8"):raw)}catch{throw new Error("Firebase service-account credentials are not valid JSON.");}
   const app=getApps()[0]||initializeApp({credential:cert(serviceAccount),databaseURL});
   database=getDatabase(app);
   return database;
