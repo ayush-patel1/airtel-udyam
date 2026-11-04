@@ -1,41 +1,61 @@
-# Udyam API
+# Airtel Business — Udyam OneShot
 
-Vercel serverless Express API for the Airtel Udyam OneShot prototype.
+A responsive end-to-end onboarding prototype for the Airtel SYNC / YTL Track A MSME case.
 
-## Required environment variables
+## Run
+This is a static web app. Open `index.html` in a browser or serve the repository root with any static server. No build command or environment variables are required.
 
-- `FIREBASE_DATABASE_URL` — Firebase Realtime Database URL.\n- `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase Admin service-account JSON (server-side only). `FIREBASE_SERVICE_ACCOUNT_JSON` is also accepted.
-- `JWT_SECRET` — random secret, minimum 32 characters.
-- `CORS_ORIGINS` — comma-separated allowed frontend origins.
-- `AWS_REGION`, `AWS_S3_BUCKET` — private S3 bucket for KYC documents. Configure KMS encryption, block public access, lifecycle/retention and least-privilege IAM.
-- `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
-- `OPENAI_API_KEY` — reserved for the conversational intent/extraction adapter; never expose it to the browser.
-- `AIRTEL_API_BASE_URL`, `AIRTEL_API_TOKEN` — reserved for Airtel catalogue/CRM/order/provisioning integration after API access is authorized.
+## Product journey
+1. **Business advisor** — capture business type, segment, city tier, team size, locations, budget, connectivity need and optional GSTIN.
+2. **Bundle & quote** — browse the 25-row supplied product catalogue; apply city-tier, employee, site, GSTIN and dependency checks; select quantities; calculate monthly price ranges, setup fees and contract term.
+3. **Bundle Passport** — create a traceable local quote/passport ID and export a CSV summary.
+4. **Smart KYC** — record consent, select supporting files locally, check identifier formats and look up mock registry entries. Optional GSTIN and Udyam CSV imports allow the complete supplied synthetic registry files to be checked in the browser.
+5. **Activation tracker** — advance a simulated order through business profile, bundle, KYC, operations/serviceability review and installation/activation milestones.
+6. **Insights** — show the synthetic case baseline and observed funnel / segment metrics.
 
-## Setup
+## Data and privacy
+- Product catalogue rules and price ranges are based on the supplied synthetic case catalogue.
+- The dashboard metrics are based on the supplied synthetic case dataset. They are not actual Airtel customer performance.
+- The embedded registry examples are only a small sample. Import the supplied `mock_gstin_registry.csv` and `mock_udyam_registry.csv` from the Smart KYC screen to query the full synthetic registries.
+- Business profile, quote, KYC check result, order state and imported registry data are stored in the current browser's localStorage.
+- Uploaded documents are selected locally; file bytes are not sent to a server or persisted by this static prototype.
+- GSTIN/Udyam lookups are mock-data checks only. Format checks do not prove identity, registration authenticity, ownership or serviceability.
+- OCR, human review queues, real consent records, payment, inventory, CRM, Airtel order management, notifications and live government integrations are not connected. Do not use this prototype for real customer onboarding or operational decisions.
 
-1. Provision Firebase Realtime Database and set `DATABASE_URL`.
-2. Run `npm install`, then `npm run db:generate` and `npm run db:migrate`.
-3. Create the first ADMIN account using a secure, one-time provisioning script (do not expose public signup).
-4. Configure the environment variables in Vercel Project Settings.
-5. Deploy. Verify `GET /api/health` and `GET /api/admin/integrations`.
-6. In Meta Developer dashboard, configure the WhatsApp webhook URL as `https://YOUR_DOMAIN/api/webhooks/whatsapp`, verify token, and subscribe to `messages`.
-7. Uploads use short-lived signed URLs; browser PUT must include the returned Content-Type header. The KYC OCR endpoint sends the stored S3 object to Textract.
+## Deployment
+The repository is connected to Vercel. Pushes to `main` create a production deployment.
 
-## WhatsApp workflow
 
-- Inbound WhatsApp webhook events are persisted idempotently in `IntegrationEvent` and `Message`.
-- Outbound text is sent through the WhatsApp Cloud API endpoint.
-- Configure approved WhatsApp message templates for business-initiated messages such as quote follow-ups, KYC reminders and activation status. The current send endpoint sends session text only; template messaging is the next adapter extension.
-- Respect the WhatsApp 24-hour customer service window, opt-in and template approval rules. Store channel/purpose consent before proactive messages.
-- Add a durable queue/worker for webhook event processing, retries, dead-letter handling and template dispatch before production traffic.
+## Backend foundation (new)
 
-## Security notes
+The repository now includes a Vercel serverless API, Firebase Realtime Database persistence adapter, JWT authentication, role-based reviewer/admin endpoints, audit events, consent records, quote/order APIs, private S3 pre-signed KYC uploads, AWS Textract OCR extraction, and a WhatsApp Cloud API webhook + outbound messaging endpoint.
 
-- API access uses short-lived JWTs and role checks. No public user registration or default admin is provided.
-- Keep credentials only in Vercel environment variables / secret manager.
-- Restrict CORS to the production frontend domain.
-- Use private S3 with KMS, signed URLs, retention policies and access logging.
-- OCR is extraction only; it does not authenticate documents. Human review is mandatory.
-- Audit events are recorded for auth, business, consent, quote, KYC, order and WhatsApp actions.
-- Before production, add rate limiting/WAF, CSRF strategy if using cookies, refresh-token rotation, webhook signature verification, queue processing, automated tests, backup/restore drills, monitoring/alerts and a formal privacy/retention policy.
+See [API setup and integration guide](api/README.md) and [.env.example](.env.example). The backend is a deployable integration foundation, not yet a live Airtel production integration: provision Firebase Realtime Database credentials and AWS resources, Meta WhatsApp Business credentials and authorized Airtel API credentials, then configure Vercel environment variables and configure RTDB rules and provision the first administrator account. OCR is extraction only and requires human verification. A durable background queue, WhatsApp template dispatch, Meta webhook signature verification, rate limiting, monitoring and full end-to-end tests remain production hardening tasks.
+
+
+## Growth Cockpit
+
+The Growth Cockpit adds:
+- Explainable Essential / Growth / Complete bundle options constrained by the catalogue eligibility rules and a monthly budget.
+- A business-value simulator for user-entered savings, incremental gross profit, monthly service cost and setup payback.
+- WhatsApp-ready quote, KYC, activation and follow-up message previews with a click-to-open WhatsApp draft.
+- A conversion control tower prioritising quote transparency, quote simplicity, follow-up speed and KYC completion using the supplied synthetic funnel.
+- A Bundle Passport decision trace across profile, quote, KYC and order status.
+
+All optimiser recommendations are deterministic catalogue heuristics, not an AI claim. ROI is scenario modelling from user-entered assumptions, not a guaranteed outcome. WhatsApp draft links do not send messages through the Cloud API; live delivery requires Meta credentials, valid opt-in, approved templates where applicable, and the configured backend.
+
+
+## AI assistant configuration
+
+The Udyam chat uses Groq's OpenAI-compatible Chat Completions API through the server-side `POST /api/assistant/chat` endpoint. Set `GROQ_API_KEY` in Vercel Project Settings → Environment Variables (Preview and Production), and optionally set `GROQ_MODEL` (defaults to `llama-3.3-70b-versatile`). Never place the key in `index.html` or any `NEXT_PUBLIC_` variable. The assistant uses the latest user message, recent chat history, business context and eligible catalogue as grounding. It validates structured responses, restricts profile edits to explicit edit requests, filters selected products against the eligible catalogue, and does not fall back to a generic scripted answer if Groq is unavailable. The endpoint sends the current business profile, recent chat turns and catalogue eligibility/price context to the model. Model-suggested catalogue SKUs are filtered against the server-provided eligible list; quote totals and eligibility remain deterministic application logic.
+
+The chat shows task-specific activity labels for profile edits, recommendations, pricing, KYC, tracking, troubleshooting and general questions. These labels describe the request workflow; they are not a display of the model's private reasoning. Chat history is held in the current page session. Requests are sent to Gemini with JSON response formatting. Configure appropriate Google AI usage limits before public demos.
+
+
+## ML-powered next-step guidance
+
+The customer journey guide calls `POST /api/journey/predict` and uses a multiclass logistic-regression model to rank the next useful action from the current journey stage and minimised in-session signals (service views, quote views, help requests, backtracking, profile completeness and budget fit). The model artifact is in `api/lib/journey-model.js`.
+
+**Important limitation:** the current model was trained and held out against synthetic journey sequences because no consented, labelled Airtel customer journey dataset is connected. Its confidence is model confidence on this synthetic prototype, not a validated probability of an individual customer's intent and not evidence of business performance. The UI falls back to transparent journey-state guidance if the prediction endpoint is unavailable. Pricing, eligibility, verification and order transitions remain deterministic and authoritative. Do not use this model for customer eligibility, credit, KYC, pricing or operational decisions.
+
+To improve it responsibly, replace the synthetic training set with consented, pseudonymised journey events and labelled next actions; evaluate calibration, top-k ranking, segment fairness and online uplift before production use.
