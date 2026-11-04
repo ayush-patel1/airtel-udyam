@@ -9,6 +9,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
 import { randomUUID, createHash, timingSafeEqual } from "node:crypto";
+import { predictJourney } from "./lib/journey-model.js";
 
 const app = express();
 const prisma = createFirebaseStore();
@@ -63,6 +64,31 @@ const quoteSchema = z.object({
   businessId:z.string(), items:z.array(z.object({sku:z.string(),name:z.string(),quantity:z.number().int().positive(),monthlyMin:z.number().nonnegative(),monthlyMax:z.number().nonnegative(),setupFee:z.number().nonnegative()})).min(1),
   ruleVersion:z.string().default("catalogue-v1"), contractMonths:z.number().int().positive().optional()
 });
+
+// ML next-best-action inference. Inputs are minimised journey signals; never send direct identifiers.
+const journeyPredictionRequests=new Map();
+const journeyFeaturesSchema=z.object({
+  stage:z.enum(["profile","discovery","quote","verification","order","progress","complete"]),
+  productViews:z.number().int().min(0).max(100).default(0),
+  quoteViews:z.number().int().min(0).max(100).default(0),
+  helpRequests:z.number().int().min(0).max(50).default(0),
+  idleMinutes:z.number().min(0).max(180).default(0),
+  backtracks:z.number().int().min(0).max(50).default(0),
+  profileCompleteness:z.number().min(0).max(1).default(0),
+  budgetFit:z.number().min(0).max(1).default(0.5)
+});
+app.post("/api/journey/predict",asyncRoute(async(req,res)=>{
+  const now=Date.now(),key=req.ip||"unknown",recent=(journeyPredictionRequests.get(key)||[]).filter(t=>now-t<60000);
+  if(recent.length>=30)return res.status(429).json({error:"Too many journey predictions. Please retry shortly."});
+  recent.push(now);journeyPredictionRequests.set(key,recent);
+  const input=validate(journeyFeaturesSchema,req.body);
+  const stages=["profile","discovery","quote","verification","order","progress","complete"];
+  const features=Object.fromEntries(stages.map(s=>["stage_"+s,Number(input.stage===s)]));
+  Object.assign(features,{product_views:input.productViews,quote_views:input.quoteViews,help_requests:input.helpRequests,idle_minutes:input.idleMinutes/180,backtracks:input.backtracks,profile_completeness:input.profileCompleteness,budget_fit:input.budgetFit});
+  const prediction=predictJourney(features);
+  res.set("Cache-Control","no-store");
+  res.json({ ...prediction, reason:"Based on the current journey stage and recent in-session interactions. This is a prototype prediction, not a statement of customer intent." });
+}));
 
 // Health and service readiness
 app.get("/api/health", (req,res) => res.json({ok:true,service:"udyam-api",time:new Date().toISOString(),integrations:{llm:Boolean(process.env.GEMINI_API_KEY),
