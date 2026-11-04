@@ -8,7 +8,7 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - `JWT_SECRET` — random secret, minimum 32 characters.
 - `CORS_ORIGINS` — comma-separated allowed frontend origins.
 - `AWS_REGION`, `AWS_S3_BUCKET` — private S3 bucket for KYC documents. Configure KMS encryption, block public access, lifecycle/retention and least-privilege IAM.
-- `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
+- `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
 - `GROQ_API_KEY` — server-side Groq API key used by the Udyam Assistant; never expose it to the browser.
 - `GROQ_MODEL` — optional model override; defaults to `llama-3.3-70b-versatile`.
 - `GEMINI_API_KEY` — optional, used only for interface translation.
@@ -26,8 +26,8 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 
 ## WhatsApp workflow
 
-- Inbound WhatsApp webhook events are persisted idempotently in `IntegrationEvent` and `Message`.
-- Outbound text is sent through the WhatsApp Cloud API endpoint.
+- Inbound WhatsApp webhooks require a valid `X-Hub-Signature-256` HMAC-SHA256 signature using `WHATSAPP_APP_SECRET` before events are persisted idempotently in `IntegrationEvent` and `Message`.
+- Outbound text is sent through the WhatsApp Cloud API endpoint only when the business contact number matches the stored contact and the latest WhatsApp consent record is granted.
 - Configure approved WhatsApp message templates for business-initiated messages such as quote follow-ups, KYC reminders and activation status. The current send endpoint sends session text only; template messaging is the next adapter extension.
 - Respect the WhatsApp 24-hour customer service window, opt-in and template approval rules. Store channel/purpose consent before proactive messages.
 - Add a durable queue/worker for webhook event processing, retries, dead-letter handling and template dispatch before production traffic.
