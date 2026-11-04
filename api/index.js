@@ -344,13 +344,19 @@ app.post("/api/kyc/:documentId/ocr",auth,allow("ADMIN","REVIEWER"),asyncRoute(as
   const out=await textract.send(new DetectDocumentTextCommand({Document:{S3Object:{Bucket:process.env.AWS_S3_BUCKET,Name:doc.storageKey}}}));
   const lines=(out.Blocks||[]).filter(b=>b.BlockType==="LINE").map(b=>b.Text).filter(Boolean);
   const extractedData={lines,provider:"AWS_TEXTRACT",extractedAt:new Date().toISOString(),disclaimer:"OCR extraction is not identity or document authenticity verification."};
-  await prisma.kycDocument.update({where:{id:doc.id},data:{extractedData,reviewStatus:"NEEDS_REVIEW"}});
+  const vault=encryptSensitive(JSON.stringify(extractedData),"kyc-ocr:"+doc.id);
+  await prisma.kycDocument.update({where:{id:doc.id},data:{extractedDataCiphertext:vault.ciphertext,extractedDataToken:vault.token,reviewStatus:"NEEDS_REVIEW"}});
   await audit(req,"KYC_OCR_EXTRACTED","KycDocument",doc.id,{lineCount:lines.length});
-  res.json({documentId:doc.id,extractedData});
+  res.set("Cache-Control","no-store");res.json({documentId:doc.id,extractedData});
 }));
 app.get("/api/kyc/queue",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
   const docs=await prisma.kycDocument.findMany({where:{reviewStatus:{in:["PENDING","NEEDS_REVIEW","NEEDS_CORRECTION"]}},include:{business:{select:{id:true,name:true,city:true}}},orderBy:{createdAt:"asc"},take:100});
-  res.json({documents:docs});
+  const documents=docs.map(doc=>{
+    const {extractedDataCiphertext,extractedDataToken,extractedData,...safe}=doc;
+    const raw=decryptSensitive(extractedDataCiphertext);
+    return {...safe,extractedData:raw?JSON.parse(raw):null};
+  });
+  res.set("Cache-Control","no-store");res.json({documents});
 }));
 app.get("/api/kyc/:documentId/download-url",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
   if(!process.env.AWS_S3_BUCKET||!process.env.AWS_REGION)return res.status(503).json({error:"Secure document storage is not configured"});
@@ -432,7 +438,8 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
   const normalisePhone=value=>String(value||"").replace(/\D/g,"");
-  if(!business.phone||normalisePhone(business.phone)!==normalisePhone(input.to))return res.status(403).json({error:"Messages can only be sent to the contact number recorded for this business"});
+  const recordedPhone=decryptSensitive(business.phoneCiphertext)||business.phone||"";
+  if(!recordedPhone||normalisePhone(recordedPhone)!==normalisePhone(input.to))return res.status(403).json({error:"Messages can only be sent to the contact number recorded for this business"});
   const consent=await prisma.consent.findFirst({where:{businessId:business.id,channel:"WHATSAPP"},orderBy:{createdAt:"desc"}});
   if(!consent?.granted)return res.status(403).json({error:"Current WhatsApp messaging consent is required before sending a message"});
   const response=await fetch(`https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION||"v23.0"}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{
