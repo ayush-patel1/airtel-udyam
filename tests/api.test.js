@@ -4,6 +4,7 @@ import { once } from "node:events";
 import { readFile } from "node:fs/promises";
 import app from "../api/index.js";
 import { buildEstimate } from "../api/lib/quote-engine.js";
+import { encryptSensitive, decryptSensitive, tokenizeSensitive } from "../api/lib/crypto-vault.js";
 
 let server;
 let baseUrl;
@@ -95,4 +96,25 @@ test("customer-facing inline JavaScript parses without syntax errors", async () 
   const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
   assert.ok(scripts.length > 0, "expected at least one inline application script");
   for (const script of scripts) new Function(script[1]);
+});
+
+test("sensitive values are AES-GCM encrypted and deterministically tokenized", () => {
+  const previousEncryption = process.env.DATA_ENCRYPTION_KEY;
+  const previousToken = process.env.TOKENIZATION_SECRET;
+  process.env.DATA_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+  process.env.TOKENIZATION_SECRET = "test-tokenization-secret-which-is-long-enough";
+  try {
+    const value = "22AAAAA0000A1Z5";
+    const first = encryptSensitive(value, "gstin");
+    const second = encryptSensitive(value, "gstin");
+    assert.equal(decryptSensitive(first.ciphertext), value);
+    assert.notEqual(first.ciphertext, second.ciphertext);
+    assert.equal(first.token, second.token);
+    assert.notEqual(tokenizeSensitive(value, "gstin"), tokenizeSensitive(value, "udyam"));
+  } finally {
+    if (previousEncryption === undefined) delete process.env.DATA_ENCRYPTION_KEY;
+    else process.env.DATA_ENCRYPTION_KEY = previousEncryption;
+    if (previousToken === undefined) delete process.env.TOKENIZATION_SECRET;
+    else process.env.TOKENIZATION_SECRET = previousToken;
+  }
 });
