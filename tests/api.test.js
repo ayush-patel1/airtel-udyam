@@ -50,3 +50,42 @@ test("WhatsApp webhook fails closed when signature secret is not configured", as
     else process.env.WHATSAPP_APP_SECRET = previous;
   }
 });
+
+import { buildEstimate } from "../api/lib/quote-engine.js";
+
+test("quote engine calculates prices from the canonical catalogue, not client values", () => {
+  const business = { cityTier:"1", segment:"micro", employees:2, sites:1 };
+  const estimate = buildEstimate(business, [{sku:"P01",quantity:2,monthlyMin:0,monthlyMax:0,setupFee:0}]);
+  assert.equal(estimate.monthlyMin, 1998);
+  assert.equal(estimate.monthlyMax, 2398);
+  assert.equal(estimate.setupTotal, 0);
+  assert.equal(estimate.contractMonths, 12);
+  assert.equal(estimate.items[0].monthlyMin, 999);
+  assert.equal(estimate.pricingSource, "CASE_CATALOGUE_ESTIMATE");
+});
+
+test("quote engine rejects a dependent service without its base connectivity", () => {
+  const business = { cityTier:"1", segment:"prof", employees:2, sites:1 };
+  assert.throws(() => buildEstimate(business, [{sku:"P09",quantity:1}]), /requires a compatible base connectivity service/);
+});
+
+test("quote engine accepts a valid dependent bundle and calculates setup fees", () => {
+  const business = { cityTier:"1", segment:"prof", employees:2, sites:1 };
+  const estimate = buildEstimate(business, [{sku:"P01",quantity:1},{sku:"P09",quantity:1}]);
+  assert.equal(estimate.monthlyMin, 1498);
+  assert.equal(estimate.monthlyMax, 1798);
+  assert.equal(estimate.setupTotal, 1500);
+});
+
+test("quote engine requires a GSTIN format for catalogue products that require one", () => {
+  const business = { cityTier:"1", segment:"prof", employees:5, sites:1 };
+  assert.throws(() => buildEstimate(business, [{sku:"P03",quantity:1}]), /requires a GSTIN/);
+  const estimate = buildEstimate({...business,gstin:"22AAAAA0000A1Z5"}, [{sku:"P03",quantity:1}]);
+  assert.equal(estimate.monthlyMin, 3999);
+});
+
+test("quote engine rejects duplicate and unknown SKUs", () => {
+  const business = { cityTier:"1", segment:"micro", employees:2, sites:1 };
+  assert.throws(() => buildEstimate(business, [{sku:"P01",quantity:1},{sku:"P01",quantity:2}]), /only once/);
+  assert.throws(() => buildEstimate(business, [{sku:"FAKE",quantity:1}]), /Unknown catalogue service/);
+});
