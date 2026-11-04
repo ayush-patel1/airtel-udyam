@@ -8,7 +8,7 @@ import { createFirebaseStore } from "./lib/firebase-store.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
-import { randomUUID, createHash, timingSafeEqual } from "node:crypto";
+import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { predictJourney } from "./lib/journey-model.js";
 
 const app = express();
@@ -18,7 +18,9 @@ app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: (process.env.CORS_ORIGINS || "").split(",").filter(Boolean), credentials: true }));
 app.use((req,res,next) => {
-  if (req.path.startsWith("/webhooks/whatsapp")) return next();
+  if (req.path === "/api/webhooks/whatsapp" && req.method === "POST") {
+    return express.raw({type:"application/json",limit:"1mb"})(req,res,next);
+  }
   return jsonParser(req,res,next);
 });
 
@@ -363,9 +365,18 @@ app.get("/api/webhooks/whatsapp",(req,res)=>{
   if(mode==="subscribe" && token && token===process.env.WHATSAPP_VERIFY_TOKEN)return res.status(200).send(challenge);
   return res.sendStatus(403);
 });
-app.post("/api/webhooks/whatsapp",express.json({type:"application/json"}),asyncRoute(async(req,res)=>{
-  // Acknowledge quickly; persist the raw event for an async worker to process.
-  const entries=req.body?.entry||[];
+app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
+  const appSecret=process.env.WHATSAPP_APP_SECRET;
+  if(!appSecret)return res.status(503).json({error:"WhatsApp webhook signature verification is not configured"});
+  const rawBody=Buffer.isBuffer(req.body)?req.body:Buffer.alloc(0);
+  const supplied=String(req.headers["x-hub-signature-256"]||"");
+  const expected="sha256="+createHmac("sha256",appSecret).update(rawBody).digest("hex");
+  const suppliedBytes=Buffer.from(supplied),expectedBytes=Buffer.from(expected);
+  if(suppliedBytes.length!==expectedBytes.length||!timingSafeEqual(suppliedBytes,expectedBytes))return res.sendStatus(401);
+  let event;
+  try{event=JSON.parse(rawBody.toString("utf8"))}catch{return res.status(400).json({error:"Invalid webhook payload"})}
+  // Persist only events authenticated with Meta's app-secret signature.
+  const entries=event?.entry||[];
   for(const entry of entries) for(const change of entry.changes||[]) {
     const value=change.value||{};
     for(const msg of value.messages||[]) {
