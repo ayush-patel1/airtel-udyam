@@ -13,7 +13,7 @@ import { predictJourney } from "./lib/journey-model.js";
 
 const app = express();
 const prisma = createFirebaseStore();
-const jsonParser = express.json({ limit: "1mb" });
+const jsonParser = express.json({ limit: "12mb" });
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: (process.env.CORS_ORIGINS || "").split(",").filter(Boolean), credentials: true }));
