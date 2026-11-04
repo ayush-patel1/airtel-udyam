@@ -17,7 +17,7 @@ A customer-facing digital onboarding experience for Indian MSMEs, built for the 
 
 ## Assistant file analysis
 
-- Accepts up to 3 PDF, JPG or PNG files per message; 4 MB per file and 8 MB combined.
+- Accepts up to 3 PDF, JPG or PNG files per message; PDFs up to 1 MB each, images are resized/compressed in the browser, and the combined prepared files are limited to 2.5 MB to fit serverless request limits.
 - Uses the server-side Gemini integration to summarise visible business context, then grounds the response in the available catalogue and current business profile.
 - Files are processed for the request and are not written to the application's database or object storage by this chat feature.
 - Customers should redact phone numbers, bank/account details, personal IDs and other sensitive information before upload.
