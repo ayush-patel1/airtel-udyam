@@ -422,12 +422,20 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
     const value=change.value||{};
     for(const msg of value.messages||[]) {
       const eventKey="wa-in-"+msg.id;
-      await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message",payload:msg},update:{}});
-      await prisma.message.upsert({where:{providerId:msg.id},create:{channel:"WHATSAPP",direction:"INBOUND",providerId:msg.id,fromAddress:msg.from,toAddress:value.metadata?.display_phone_number||"",body:msg.text?.body||null,payload:msg},update:{}});
+      const encryptedEvent=encryptSensitive(JSON.stringify(msg),"whatsapp-inbound:"+msg.id);
+      const encryptedBody=encryptSensitive(msg.text?.body||"","whatsapp-body:"+msg.id);
+      await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message",payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token},update:{}});
+      await prisma.message.upsert({where:{providerId:msg.id},create:{
+        channel:"WHATSAPP",direction:"INBOUND",providerId:msg.id,
+        fromAddress:mask(msg.from),toAddress:mask(value.metadata?.display_phone_number||""),
+        body:null,bodyCiphertext:encryptedBody.ciphertext,bodyToken:encryptedBody.token,
+        payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token
+      },update:{}});
     }
     for(const status of value.statuses||[]) {
       const eventKey="wa-status-"+status.id+"-"+status.status;
-      await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message_status",payload:status},update:{}});
+      const encryptedStatus=encryptSensitive(JSON.stringify(status),"whatsapp-status:"+eventKey);
+      await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message_status",payloadCiphertext:encryptedStatus.ciphertext,payloadToken:encryptedStatus.token},update:{}});
     }
   }
   res.sendStatus(200);
@@ -447,8 +455,18 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
     body:JSON.stringify({messaging_product:"whatsapp",recipient_type:"individual",to:input.to.replace("+",""),type:"text",text:{preview_url:false,body:input.text}})
   });
   const payload=await response.json();
-  if(!response.ok)return res.status(502).json({error:"WhatsApp provider rejected the message",provider:payload});
-  const message=await prisma.message.create({data:{businessId:input.businessId,channel:"WHATSAPP",direction:"OUTBOUND",providerId:payload.messages?.[0]?.id,fromAddress:process.env.WHATSAPP_PHONE_NUMBER_ID,toAddress:input.to,body:input.text,status:"SENT",payload}});
+  if(!response.ok)return res.status(502).json({error:"WhatsApp provider rejected the message"});
+  const providerId=payload.messages?.[0]?.id||null;
+  const recipientVault=encryptSensitive(input.to,"whatsapp-recipient:"+input.businessId);
+  const bodyVault=encryptSensitive(input.text,"whatsapp-body:"+input.businessId);
+  const providerVault=encryptSensitive(JSON.stringify(payload),"whatsapp-provider:"+String(providerId||"unknown"));
+  const message=await prisma.message.create({data:{
+    businessId:input.businessId,channel:"WHATSAPP",direction:"OUTBOUND",providerId,
+    fromAddress:process.env.WHATSAPP_PHONE_NUMBER_ID,toAddress:mask(input.to),body:null,
+    toAddressCiphertext:recipientVault.ciphertext,toAddressToken:recipientVault.token,
+    bodyCiphertext:bodyVault.ciphertext,bodyToken:bodyVault.token,
+    payloadCiphertext:providerVault.ciphertext,payloadToken:providerVault.token,status:"SENT"
+  }});
   await audit(req,"WHATSAPP_MESSAGE_SENT","Message",message.id,{to:mask(input.to)});
   res.status(201).json({messageId:message.id,status:"SENT"});
 }));
