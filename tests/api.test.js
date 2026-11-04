@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { readFile } from "node:fs/promises";
 import app from "../api/index.js";
 import { buildEstimate } from "../api/lib/quote-engine.js";
 
@@ -87,4 +88,11 @@ test("quote engine rejects duplicate and unknown SKUs", () => {
   const business = { cityTier:"1", segment:"micro", employees:2, sites:1 };
   assert.throws(() => buildEstimate(business, [{sku:"P01",quantity:1},{sku:"P01",quantity:2}]), /only once/);
   assert.throws(() => buildEstimate(business, [{sku:"FAKE",quantity:1}]), /Unknown catalogue service/);
+});
+
+test("customer-facing inline JavaScript parses without syntax errors", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
+  assert.ok(scripts.length > 0, "expected at least one inline application script");
+  for (const script of scripts) new Function(script[1]);
 });
