@@ -158,7 +158,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     "Do not claim you changed a profile, selected a service, submitted a quote, verified a business, sent a message, created an order or changed status unless the structured action below explicitly performs it.",
     "PROFILE EDITS: only when editMode=true may you propose updates. Change only a field the user clearly asked to change and supplied a clear value for. Otherwise ask for the missing value. For all other messages profile_updates must contain nulls.",
     "STRUCTURED ACTIONS: selected_skus must be empty unless the user explicitly asks for a recommendation or to add/select services; then choose only relevant eligible SKUs. navigation should be none unless a screen is directly needed to complete the user's requested task.",
-    "Return one valid JSON object with reply, profile_updates, selected_skus and navigation. reply must directly answer the latest message."
+    "Return exactly one JSON object with this shape: {"reply":"string","profile_updates":{"name":null,"type":null,"city":null,"employees":null,"sites":null,"budget":null,"need":null},"selected_skus":[],"navigation":"none"}. Use null for unchanged profile fields. reply must directly answer the latest message."
   ].join("\n");
   const safeContext={
     business:input.business||null,
