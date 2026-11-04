@@ -11,16 +11,16 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
 - `GROQ_API_KEY` — server-side Groq API key used by the Udyam Assistant; never expose it to the browser.
 - `GROQ_MODEL` — optional model override; defaults to `llama-3.3-70b-versatile`.
-- `GEMINI_API_KEY` — optional, used only for interface translation.
+- `GEMINI_API_KEY` — used for interface translation and multimodal assistant attachment analysis. `GEMINI_MODEL` optionally selects the model (defaults to `gemini-3.8-flash`).
 - `AIRTEL_API_BASE_URL`, `AIRTEL_API_TOKEN` — reserved for Airtel catalogue/CRM/order/provisioning integration after API access is authorized.
 
 ## Setup
 
-1. Provision Firebase Realtime Database and set `DATABASE_URL`.
-2. Run `npm install`, then `npm run db:generate` and `npm run db:migrate`.
+1. Provision Firebase Realtime Database and set `FIREBASE_DATABASE_URL` plus the service-account credential.
+2. Run `npm install`. This repository uses the Firebase Realtime Database adapter; there are no Prisma migration or `db:generate` scripts.
 3. Create the first ADMIN account using a secure, one-time provisioning script (do not expose public signup).
 4. Configure the environment variables in Vercel Project Settings.
-5. Deploy. Verify `GET /api/health` and `GET /api/admin/integrations`.
+5. Deploy. Verify `GET /api/health` and, after staff sign-in, `GET /api/admin/integrations`. Run `npm test` for API smoke tests.
 6. In Meta Developer dashboard, configure the WhatsApp webhook URL as `https://YOUR_DOMAIN/api/webhooks/whatsapp`, verify token, and subscribe to `messages`.
 7. Uploads use short-lived signed URLs; browser PUT must include the returned Content-Type header. The KYC OCR endpoint sends the stored S3 object to Textract.
 
@@ -40,4 +40,4 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - Use private S3 with KMS, signed URLs, retention policies and access logging.
 - OCR is extraction only; it does not authenticate documents. Human review is mandatory.
 - Audit events are recorded for auth, business, consent, quote, KYC, order and WhatsApp actions.
-- Before production, add rate limiting/WAF, CSRF strategy if using cookies, refresh-token rotation, webhook signature verification, queue processing, automated tests, backup/restore drills, monitoring/alerts and a formal privacy/retention policy.
+- Before production, add distributed rate limiting/WAF, CSRF strategy if using cookies, refresh-token rotation, durable queue processing, automated integration tests, backup/restore drills, monitoring/alerts and a formal privacy/retention policy. WhatsApp signature validation is implemented and requires `WHATSAPP_APP_SECRET`; it must be configured before webhook events are accepted.
