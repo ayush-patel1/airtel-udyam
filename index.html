@@ -562,6 +562,8 @@ function handleAssistantFiles(fileList){
   if(!["application/pdf","image/jpeg","image/png"].includes(file.type)){toast("Please choose a PDF, JPG or PNG file.");continue}
   if(file.size>4*1024*1024){toast(file.name+" is larger than 4 MB.");continue}
   if(assistantPendingFiles.length+accepted.length>=3){toast("You can attach up to 3 files per message.");break}
+  const combined=[...assistantPendingFiles,...accepted].reduce((sum,item)=>sum+item.size,0)+file.size;
+  if(combined>8*1024*1024){toast("Please keep all attachments together under 8 MB.");break}
   accepted.push(file);
  }
  assistantPendingFiles.push(...accepted);renderAssistantAttachments();
@@ -632,7 +634,7 @@ async function sendCopilotMessage(){
   }),signal:AbortSignal.timeout(20000)});
   const raw=await response.text();let data;try{data=JSON.parse(raw)}catch{console.error("Assistant API returned non-JSON",response.status,raw.slice(0,500));throw new Error(response.status>=500?"The assistant server is temporarily unavailable. Please try again in a moment.":"The assistant returned an unexpected response. Please refresh and try again.")}if(!response.ok)throw new Error(data.error||"Assistant request failed");
   const answer=applyAssistantResult(data.result||{});
-  assistantHistory.push({role:"user",content:(msg||"Please review my attached business materials.")+(files.length?" [Attached: "+files.map(file=>file.name).join(", ")+"]":""),role:"user"},{role:"assistant",content:answer});
+  assistantHistory.push({role:"user",content:(msg||"Please review my attached business materials.")+(files.length?" [Attached: "+files.map(file=>file.name).join(", ")+"]":"")},{role:"assistant",content:answer});
   assistantPendingFiles=[];renderAssistantAttachments();
   bubble.textContent=answer;bubble.style.whiteSpace="pre-line";speakAssistantReply(answer);
  }catch(error){console.error("Udyam Assistant request failed:",error);const answer=localAssistantFallback(msg);bubble.textContent=answer;bubble.classList.add("assistant-fallback");speakAssistantReply(answer);const t=String(msg).toLowerCase();if(/track|status|activation|order|installation|progress/.test(t))addAssistantNextStep(bubble,"Open activation tracker","tracker");else if(/kyc|gstin|udyam|verify|document|consent|registration/.test(t))addAssistantNextStep(bubble,"Continue business verification","kyc");else if(/quote|price|cost|₹|budget|bundle|service|product|recommend/.test(t))addAssistantNextStep(bubble,"Review eligible services","quote");else addAssistantNextStep(bubble,"Set up business profile","advisor")}
