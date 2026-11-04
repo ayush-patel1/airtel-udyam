@@ -38,7 +38,7 @@ A customer-facing digital onboarding experience for Indian MSMEs, built for the 
 
 - **Frontend:** responsive HTML, CSS and JavaScript; browser-native voice input/output; browser OCR with Tesseract.js and PDF.js for Smart KYC.
 - **Assistant:** Groq chat completion with Gemini multimodal file analysis; server-side credentials and structured catalogue context.
-- **Backend foundation:** Express on Vercel, JWT authentication, role-based access, Firebase Realtime Database adapter, audit events, S3 pre-signed uploads, AWS Textract OCR and WhatsApp Cloud API adapter.
+- **Backend foundation:** Express on Vercel, JWT authentication, role-based access, Firebase Realtime Database adapter, audit events, S3 pre-signed uploads, AWS Textract OCR and WhatsApp Cloud API adapter. The staff quote API now accepts SKUs and quantities only; a canonical server-side catalogue calculates prices and eligibility. Reviewer access is role-gated, document links are short-lived, and order approval requires every submitted KYC document to be verified.
 - **Analytics:** deterministic catalogue and budget rules, explainable recommendation signals, user-entered ROI scenarios and a synthetic journey model.
 
 ## Run locally
