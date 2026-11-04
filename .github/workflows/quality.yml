@@ -20,5 +20,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Summarise production dependency advisories
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e 'const a=require("./audit.json"); const v=a.vulnerabilities||{}; console.log(JSON.stringify(Object.entries(v).map(([name,x])=>({name,severity:x.severity,range:x.range,fixAvailable:x.fixAvailable})),null,2));'
       - name: Run API smoke tests
         run: npm test
