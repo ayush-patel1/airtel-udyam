@@ -8,7 +8,7 @@ import { createFirebaseStore } from "./lib/firebase-store.js";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
-import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { predictJourney } from "./lib/journey-model.js";
 import { buildEstimate } from "./lib/quote-engine.js";
 import { CATALOGUE_VERSION } from "./lib/catalogue.js";
@@ -330,7 +330,8 @@ app.post("/api/kyc/upload-url",auth,allow("ADMIN","REVIEWER","SALES"),asyncRoute
   const key=`kyc/${input.businessId}/${randomUUID()}`;
   const command=new PutObjectCommand({Bucket:process.env.AWS_S3_BUCKET,Key:key,ContentType:input.mimeType,ServerSideEncryption:"aws:kms",Metadata:{businessid:input.businessId}});
   const uploadUrl=await getSignedUrl(s3(),command,{expiresIn:300});
-  const doc=await prisma.kycDocument.create({data:{businessId:input.businessId,documentType:input.documentType,storageKey:key,originalName:input.fileName,mimeType:input.mimeType,sizeBytes:input.sizeBytes,reviewStatus:"PENDING"}});
+  const extension=input.mimeType==="application/pdf"?"pdf":input.mimeType==="image/png"?"png":"jpg";
+  const doc=await prisma.kycDocument.create({data:{businessId:input.businessId,documentType:input.documentType,storageKey:key,originalName:input.documentType+"."+extension,mimeType:input.mimeType,sizeBytes:input.sizeBytes,reviewStatus:"PENDING"}});
   await audit(req,"KYC_UPLOAD_URL_ISSUED","KycDocument",doc.id,{documentType:input.documentType});
   res.status(201).json({documentId:doc.id,uploadUrl,expiresIn:300,requiredHeaders:{"Content-Type":input.mimeType}});
 }));
