@@ -10,6 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
 import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { predictJourney } from "./lib/journey-model.js";
+import { CATALOGUE, CATALOGUE_VERSION } from "./lib/catalogue.js";
 
 const app = express();
 const prisma = createFirebaseStore();
@@ -60,11 +61,13 @@ function validate(schema, value) {
 const businessSchema = z.object({
   name:z.string().min(2).max(160), phone:z.string().max(20).optional(), email:z.email().optional(),
   preferredLang:z.string().default("en"), segment:z.string().optional(), city:z.string().optional(),
-  cityTier:z.string().optional(), gstin:z.string().max(20).optional(), udyamNumber:z.string().max(30).optional()
+  cityTier:z.string().optional(), employees:z.number().int().min(0).default(0), sites:z.number().int().min(1).default(1),
+  budget:z.number().nonnegative().optional(), need:z.string().max(500).optional(),
+  gstin:z.string().max(20).optional(), udyamNumber:z.string().max(30).optional()
 });
 const quoteSchema = z.object({
-  businessId:z.string(), items:z.array(z.object({sku:z.string(),name:z.string(),quantity:z.number().int().positive(),monthlyMin:z.number().nonnegative(),monthlyMax:z.number().nonnegative(),setupFee:z.number().nonnegative()})).min(1),
-  ruleVersion:z.string().default("catalogue-v1"), contractMonths:z.number().int().positive().optional()
+  businessId:z.string(),
+  items:z.array(z.object({sku:z.string().min(1),quantity:z.number().int().min(1).max(1000)})).min(1).max(25)
 });
 
 // ML next-best-action inference. Inputs are minimised journey signals; never send direct identifiers.
@@ -277,20 +280,39 @@ app.post("/api/businesses/:id/consent",auth,asyncRoute(async(req,res)=>{
   res.status(201).json({consent});
 }));
 
-// Deterministic quote calculation. Catalogue/eligibility is always server-authoritative.
-app.post("/api/quotes",auth,asyncRoute(async(req,res)=>{
+// Deterministic quote calculation. The server owns the catalogue, eligibility rules and every price.
+app.post("/api/quotes",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(quoteSchema,req.body);
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
-  if(input.items.some(i=>i.monthlyMax<i.monthlyMin))return res.status(400).json({error:"Invalid price range"});
-  const monthlyMin=input.items.reduce((s,i)=>s+i.monthlyMin*i.quantity,0);
-  const monthlyMax=input.items.reduce((s,i)=>s+i.monthlyMax*i.quantity,0);
-  const setupTotal=input.items.reduce((s,i)=>s+i.setupFee*i.quantity,0);
-  const quote=await prisma.quote.create({data:{quoteNumber:"UDQ-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),businessId:business.id,items:input.items,monthlyMin,monthlyMax,setupTotal,contractMonths:input.contractMonths,ruleVersion:input.ruleVersion}});
-  await audit(req,"QUOTE_CREATED","Quote",quote.id,{quoteNumber:quote.quoteNumber,monthlyMin,monthlyMax});
-  res.status(201).json({quote});
+  if(!business.cityTier||!business.segment)return res.status(400).json({error:"Complete the business location and segment before preparing an estimate"});
+  const skus=input.items.map(item=>item.sku);
+  if(new Set(skus).size!==skus.length)return res.status(400).json({error:"Each catalogue service can appear only once; update its quantity instead"});
+  const selected=new Set(skus),pricedItems=[];
+  for(const item of input.items){
+    const product=CATALOGUE.get(item.sku);
+    if(!product)return res.status(400).json({error:"Unknown catalogue service: "+item.sku});
+    if(!product.cityTiers.includes(String(business.cityTier)))return res.status(409).json({error:product.name+" is not eligible for the selected city tier"});
+    if(!product.segments.includes(String(business.segment)))return res.status(409).json({error:product.name+" is not eligible for the selected business segment"});
+    if(Number(business.employees||0)<product.minEmployees)return res.status(409).json({error:product.name+" requires at least "+product.minEmployees+" employees"});
+    if(Number(business.sites||1)<product.minSites)return res.status(409).json({error:product.name+" requires at least "+product.minSites+" business sites"});
+    if(product.requiresGstin&&!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(String(business.gstin||"")))return res.status(409).json({error:product.name+" requires a GSTIN to be provided for subsequent verification"});
+    if(product.dependencies.length&&!product.dependencies.some(sku=>selected.has(sku)))return res.status(409).json({error:product.name+" requires a compatible base connectivity service"});
+    pricedItems.push({sku:product.sku,name:product.name,category:product.category,unit:product.unit,quantity:item.quantity,monthlyMin:product.monthlyMin,monthlyMax:product.monthlyMax,setupFee:product.setupFee,contractMonths:product.contractMonths});
+  }
+  const monthlyMin=pricedItems.reduce((sum,item)=>sum+item.monthlyMin*item.quantity,0);
+  const monthlyMax=pricedItems.reduce((sum,item)=>sum+item.monthlyMax*item.quantity,0);
+  const setupTotal=pricedItems.reduce((sum,item)=>sum+item.setupFee*item.quantity,0);
+  const contractMonths=Math.max(...pricedItems.map(item=>item.contractMonths));
+  const quote=await prisma.quote.create({data:{
+    quoteNumber:"EST-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),
+    businessId:business.id,items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths,
+    ruleVersion:CATALOGUE_VERSION,pricingSource:"CASE_CATALOGUE_ESTIMATE",status:"DRAFT_ESTIMATE"
+  }});
+  await audit(req,"ESTIMATE_CREATED","Quote",quote.id,{quoteNumber:quote.quoteNumber,monthlyMin,monthlyMax,catalogueVersion:CATALOGUE_VERSION});
+  res.status(201).json({quote,notice:"Indicative case-study catalogue estimate only; not a live Airtel quotation."});
 }));
-app.get("/api/quotes/:id",auth,asyncRoute(async(req,res)=>{
+app.get("/api/quotes/:id",auth,allow("ADMIN","SALES","REVIEWER"),asyncRoute(async(req,res)=>{
   const quote=await prisma.quote.findUnique({where:{id:req.params.id},include:{business:{select:{id:true,name:true,city:true,segment:true}}}});
   if(!quote)return res.status(404).json({error:"Quote not found"});
   res.json({quote});
@@ -336,7 +358,7 @@ app.post("/api/kyc/:documentId/review",auth,allow("ADMIN","REVIEWER"),asyncRoute
 
 // Order state machine: clients cannot skip mandatory review/provisioning transitions.
 const transitions={DRAFT:["QUOTED","CANCELLED"],QUOTED:["KYC_PENDING","CANCELLED"],KYC_PENDING:["UNDER_REVIEW","CANCELLED"],UNDER_REVIEW:["APPROVED","REJECTED"],APPROVED:["PROVISIONING"],PROVISIONING:["ACTIVE"],REJECTED:[],ACTIVE:[],CANCELLED:[]};
-app.post("/api/orders",auth,asyncRoute(async(req,res)=>{
+app.post("/api/orders",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(z.object({businessId:z.string(),quoteId:z.string()}),req.body);
   const quote=await prisma.quote.findFirst({where:{id:input.quoteId,businessId:input.businessId}});
   if(!quote)return res.status(404).json({error:"Matching quote not found"});
