@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { createFirebaseStore } from "./lib/firebase-store.js";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
 import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto";
@@ -311,7 +311,7 @@ app.post("/api/kyc/upload-url",auth,allow("ADMIN","REVIEWER","SALES"),asyncRoute
   const key=`kyc/${input.businessId}/${randomUUID()}`;
   const command=new PutObjectCommand({Bucket:process.env.AWS_S3_BUCKET,Key:key,ContentType:input.mimeType,ServerSideEncryption:"aws:kms",Metadata:{businessid:input.businessId}});
   const uploadUrl=await getSignedUrl(s3(),command,{expiresIn:300});
-  const doc=await prisma.kycDocument.create({data:{businessId:input.businessId,documentType:input.documentType,storageKey:key,originalName:input.fileName,mimeType:input.mimeType,sizeBytes:input.sizeBytes}});
+  const doc=await prisma.kycDocument.create({data:{businessId:input.businessId,documentType:input.documentType,storageKey:key,originalName:input.fileName,mimeType:input.mimeType,sizeBytes:input.sizeBytes,reviewStatus:"PENDING"}});
   await audit(req,"KYC_UPLOAD_URL_ISSUED","KycDocument",doc.id,{documentType:input.documentType});
   res.status(201).json({documentId:doc.id,uploadUrl,expiresIn:300,requiredHeaders:{"Content-Type":input.mimeType}});
 }));
@@ -330,12 +330,20 @@ app.post("/api/kyc/:documentId/ocr",auth,allow("ADMIN","REVIEWER"),asyncRoute(as
   res.json({documentId:doc.id,extractedData});
 }));
 app.get("/api/kyc/queue",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
-  const docs=await prisma.kycDocument.findMany({where:{reviewStatus:{in:["PENDING","NEEDS_REVIEW"]}},include:{business:{select:{id:true,name:true,city:true}}},orderBy:{createdAt:"asc"},take:100});
+  const docs=await prisma.kycDocument.findMany({where:{reviewStatus:{in:["PENDING","NEEDS_REVIEW","NEEDS_CORRECTION"]}},include:{business:{select:{id:true,name:true,city:true}}},orderBy:{createdAt:"asc"},take:100});
   res.json({documents:docs});
 }));
+app.get("/api/kyc/:documentId/download-url",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
+  if(!process.env.AWS_S3_BUCKET||!process.env.AWS_REGION)return res.status(503).json({error:"Secure document storage is not configured"});
+  const doc=await prisma.kycDocument.findUnique({where:{id:req.params.documentId}});
+  if(!doc)return res.status(404).json({error:"Document not found"});
+  const url=await getSignedUrl(s3(),new GetObjectCommand({Bucket:process.env.AWS_S3_BUCKET,Key:doc.storageKey}),{expiresIn:60});
+  await audit(req,"KYC_DOCUMENT_VIEW_URL_ISSUED","KycDocument",doc.id);
+  res.set("Cache-Control","no-store");res.json({url,expiresIn:60,document:{id:doc.id,name:doc.originalName,type:doc.documentType}});
+}));
 app.post("/api/kyc/:documentId/review",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
-  const input=validate(z.object({decision:z.enum(["VERIFIED","REJECTED"]),notes:z.string().max(1000).optional()}),req.body);
-  const doc=await prisma.kycDocument.update({where:{id:req.params.documentId},data:{reviewStatus:input.decision,reviewerId:req.user.sub,reviewedAt:new Date()}});
+  const input=validate(z.object({decision:z.enum(["VERIFIED","REJECTED","NEEDS_CORRECTION"]),notes:z.string().max(1000).optional()}),req.body);
+  const doc=await prisma.kycDocument.update({where:{id:req.params.documentId},data:{reviewStatus:input.decision,reviewNotes:input.notes||null,reviewerId:req.user.sub,reviewedAt:new Date()}});
   await audit(req,"KYC_REVIEW_"+input.decision,"KycDocument",doc.id,{notes:input.notes||null});
   res.json({document:doc});
 }));
@@ -356,8 +364,9 @@ app.patch("/api/orders/:id/status",auth,allow("ADMIN","REVIEWER","OPERATIONS"),a
   if(!order)return res.status(404).json({error:"Order not found"});
   if(!transitions[order.status]?.includes(input.status))return res.status(409).json({error:`Transition ${order.status} → ${input.status} is not allowed`});
   if(input.status==="APPROVED"){
-    const pending=await prisma.kycDocument.count({where:{businessId:order.businessId,reviewStatus:{not:"VERIFIED"}}});
-    if(pending>0)return res.status(409).json({error:"All submitted KYC documents must be reviewed before approval"});
+    const documents=await prisma.kycDocument.findMany({where:{businessId:order.businessId}});
+    if(!documents.length)return res.status(409).json({error:"No business verification documents have been submitted"});
+    if(documents.some(doc=>doc.reviewStatus!=="VERIFIED"))return res.status(409).json({error:"Every submitted KYC document must be verified before order approval"});
   }
   const milestones=Array.isArray(order.milestones)?order.milestones:[];
   milestones.push({status:input.status,at:new Date().toISOString(),actor:req.user.sub});
