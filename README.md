@@ -29,10 +29,11 @@ A customer-facing digital onboarding experience for Indian MSMEs, built for the 
 - Catalogue prices are indicative ranges from the case prototype, not live Airtel prices.
 - Eligibility rules are prototype catalogue rules, not Airtel serviceability or credit decisions.
 - GSTIN/Udyam extraction is not an authenticity check. Final verification requires an authorised reviewer and an approved integration.
-- Local profile, bundle, quote draft and journey state are stored in the current browser. They are not a shared customer account or a durable Airtel CRM record.
+- Local profile, bundle, estimate draft and journey state are stored in the current browser. They are not a shared customer account or a durable Airtel CRM record.
+- The backend vault uses AES-256-GCM encryption for business contact details, GSTIN/Udyam values, OCR text and WhatsApp message content, with separate HMAC-SHA256 tokens for matching. Audit and consent IP evidence is tokenized. Backend writes containing sensitive data fail closed until both encryption secrets are configured.
 - The UI distinguishes estimates, draft requests, pending review and completed states. No Airtel order, payment, service activation or government verification is claimed unless a real integration confirms it.
 - The journey prediction model is trained on synthetic sequences. Its scores are prototype guidance, not validated customer-intent probabilities and must not be used for eligibility, KYC, pricing or operational decisions.
-- The deployed environment currently has the Groq and Gemini assistant credentials configured. Firebase persistence, private AWS document storage/Textract, WhatsApp Cloud API and Airtel CRM/catalogue/order integrations are optional backend adapters and must be provisioned and tested before those capabilities can be treated as live.
+- The deployed environment currently has the Groq and Gemini assistant credentials configured. Firebase persistence, encryption/tokenization secrets, private AWS document storage/Textract, WhatsApp Cloud API and Airtel CRM/catalogue/order integrations are optional backend adapters and must be provisioned and tested before those capabilities can be treated as live.
 
 ## Technology
 
