@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import app from "../api/index.js";
+import { buildEstimate } from "../api/lib/quote-engine.js";
 
 let server;
 let baseUrl;
@@ -50,8 +51,6 @@ test("WhatsApp webhook fails closed when signature secret is not configured", as
     else process.env.WHATSAPP_APP_SECRET = previous;
   }
 });
-
-import { buildEstimate } from "../api/lib/quote-engine.js";
 
 test("quote engine calculates prices from the canonical catalogue, not client values", () => {
   const business = { cityTier:"1", segment:"micro", employees:2, sites:1 };
