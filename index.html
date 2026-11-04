@@ -530,7 +530,7 @@ function renderTracker(){
  $("trackSetup").textContent=hasQuote?money(totals.setup):"₹0";
  $("trackDays").textContent="Not confirmed";
 }
-function exportPassport(){if(!state.profile||!state.quote){toast("Create a profile and quote first.");return}const p=state.profile,t=quoteTotals();const data=[["UDYAM ONESHOT BUNDLE PASSPORT"],["Passport ID",state.passportId],["Quote ID",state.quote.id],["Business",p.name],["Segment",p.segment],["City",p.city],["Sites",p.sites],["Products",state.quote.items.map(x=>x.name+" × "+x.qty).join("; ")],["Monthly range",money(t.min)+" - "+money(t.max)],["Setup",money(t.setup)],["KYC status",state.kyc?(state.kyc.status==="Ready for human review"?"Checks complete · not submitted":state.kyc.status):"Not started"],["Order status","Not submitted to Airtel"],["Notice","Synthetic   record.  "]];const csv=data.map(r=>r.map(x=>'"'+String(x??"").replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=(state.passportId||"udyam-passport")+".csv";a.click();URL.revokeObjectURL(a.href)}
+function exportPassport(){if(!state.profile||!state.quote){toast("Create a profile and quote first.");return}const p=state.profile,t=quoteTotals();const data=[["UDYAM ONESHOT BUNDLE PASSPORT"],["Passport ID",state.passportId],["Estimate ID",state.quote.id],["Business",p.name],["Segment",p.segment],["City",p.city],["Sites",p.sites],["Products",state.quote.items.map(x=>x.name+" × "+x.qty).join("; ")],["Monthly range",money(t.min)+" - "+money(t.max)],["Setup",money(t.setup)],["KYC status",state.kyc?(state.kyc.status==="Ready for human review"?"Checks complete · not submitted":state.kyc.status):"Not started"],["Order status","Not submitted to Airtel"],["Notice","Synthetic   record.  "]];const csv=data.map(r=>r.map(x=>'"'+String(x??"").replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=(state.passportId||"udyam-passport")+".csv";a.click();URL.revokeObjectURL(a.href)}
 function clearAll(){if(!confirm("Clear the saved   business, quote, KYC and order from this browser?"))return;localStorage.removeItem(KEY);location.reload()}
 let copilotTurns=0;
 let businessEditField=null;
@@ -710,10 +710,10 @@ function refreshWhatsAppPreview(){
  if(!$("waPreview"))return;
  const biz=state.profile?.name||"your business",quote=state.quote?.id||"your Airtel Business quote",t=$("waTemplate").value;
  const messages={
- quote:"Hello "+biz+"! Your Airtel Business bundle quote "+quote+" is ready. It includes an itemised service mix and monthly price range. Reply here if you would like a walkthrough. This is a   message; final pricing and availability are subject to confirmation.",
+ quote:"Hello "+biz+"! Your indicative Airtel Business bundle estimate "+quote+" is ready to review. It includes a suggested service mix and catalogue price range. This is a draft from the Udyam OneShot prototype, not an official Airtel quotation. Final pricing and availability require confirmation.",
  kyc:"Hello "+biz+"! To continue your Airtel Business onboarding, please share the requested business verification documents through the secure onboarding link provided by your authorised Airtel representative. Please do not send sensitive identity documents in this chat.",
- activation:"Hello "+biz+"! Your Airtel Business onboarding journey has an update: "+(state.order?.status||"awaiting order review")+". Your representative will confirm serviceability, installation and activation timelines.",
- followup:"Hello "+biz+"! We wanted to check whether you had a chance to review quote "+quote+". We can help compare Essential, Growth and Complete options and clarify itemised pricing. Reply STOP if you do not wish to receive further updates."
+ activation:"Hello "+biz+"! Your Udyam OneShot business details are prepared, but no Airtel order or activation request has been submitted through this website. Please contact your authorised Airtel Business representative to confirm the official next steps.",
+ followup:"Hello "+biz+"! We wanted to check whether you had a chance to review your indicative bundle estimate "+quote+". We can help compare the suggested options and clarify catalogue price ranges. Reply STOP if you do not wish to receive further updates."
  };
  $("waPreview").value=messages[t];
 }
