@@ -1,61 +1,77 @@
 # Airtel Business — Udyam OneShot
 
-A responsive end-to-end onboarding prototype for the Airtel SYNC / YTL Track A MSME case.
+A customer-facing digital onboarding experience for Indian MSMEs, built for the Airtel SYNC 2026 Digital Track.
 
-## Run
-This is a static web app. Open `index.html` in a browser or serve the repository root with any static server. No build command or environment variables are required.
+**Product goal:** help a small business move from understanding its needs to discovering relevant services, comparing an indicative bundle, preparing verification documents and understanding what happens next — without hiding uncertainty or presenting a prototype action as a completed Airtel transaction.
 
-## Product journey
-1. **Business advisor** — capture business type, segment, city tier, team size, locations, budget, connectivity need and optional GSTIN.
-2. **Bundle & quote** — browse the 25-row supplied product catalogue; apply city-tier, employee, site, GSTIN and dependency checks; select quantities; calculate monthly price ranges, setup fees and contract term.
-3. **Bundle Passport** — create a traceable local quote/passport ID and export a CSV summary.
-4. **Smart KYC** — record consent, select supporting files locally, check identifier formats and look up mock registry entries. Optional GSTIN and Udyam CSV imports allow the complete supplied synthetic registry files to be checked in the browser.
-5. **Activation tracker** — advance a simulated order through business profile, bundle, KYC, operations/serviceability review and installation/activation milestones.
-6. **Insights** — show the synthetic case baseline and observed funnel / segment metrics.
+## Customer experience
 
-## Data and privacy
-- Product catalogue rules and price ranges are based on the supplied synthetic case catalogue.
-- The dashboard metrics are based on the supplied synthetic case dataset. They are not actual Airtel customer performance.
-- The embedded registry examples are only a small sample. Import the supplied `mock_gstin_registry.csv` and `mock_udyam_registry.csv` from the Smart KYC screen to query the full synthetic registries.
-- Business profile, quote, KYC check result, order state and imported registry data are stored in the current browser's localStorage.
-- Uploaded documents are selected locally; file bytes are not sent to a server or persisted by this static prototype.
-- GSTIN/Udyam lookups are mock-data checks only. Format checks do not prove identity, registration authenticity, ownership or serviceability.
-- OCR, human review queues, real consent records, payment, inventory, CRM, Airtel order management, notifications and live government integrations are not connected. Do not use this prototype for real customer onboarding or operational decisions.
+1. **Business discovery** — capture business type, location, team size, sites, budget and operational priorities.
+2. **Personalised service discovery** — browse a 25-item sample catalogue with transparent eligibility rules and explainable recommendations.
+3. **Bundle and estimate** — compare service combinations, monthly price ranges, setup costs and contract terms. The current browser journey saves a draft estimate locally; it is not an official Airtel quotation.
+4. **Bundle Passport** — export a customer-readable summary of the selected services and assumptions.
+5. **Smart KYC** — upload GST/Udyam certificates in the dedicated verification step, extract identifiers locally using browser OCR and review the extracted details. Extraction and format checks do not prove document authenticity or government registration.
+6. **Journey guidance** — see the next step and understand which checks or human review remain.
+7. **Growth Cockpit** — compare budget-constrained bundles, model user-entered business-value assumptions and review synthetic funnel insights.
+8. **Udyam Assistant** — ask contextual questions, use guided prompts, switch supported languages, dictate messages and attach redacted business photos, floor plans, service brochures or bills for preliminary AI analysis.
 
-## Deployment
-The repository is connected to Vercel. Pushes to `main` create a production deployment.
+## Assistant file analysis
 
+- Accepts up to 3 PDF, JPG or PNG files per message; 4 MB per file and 8 MB combined.
+- Uses the server-side Gemini integration to summarise visible business context, then grounds the response in the available catalogue and current business profile.
+- Files are processed for the request and are not written to the application's database or object storage by this chat feature.
+- Customers should redact phone numbers, bank/account details, personal IDs and other sensitive information before upload.
+- Do not upload GST/Udyam certificates, identity documents, bank statements or unredacted bills into chat. Official verification documents belong in Smart KYC.
+- Image-based recommendations are preliminary. They are not a site survey, a coverage check, an official KYC decision, a binding quote or confirmation that an Airtel service is available.
 
-## Backend foundation (new)
+## Trust, privacy and product integrity
 
-The repository now includes a Vercel serverless API, Firebase Realtime Database persistence adapter, JWT authentication, role-based reviewer/admin endpoints, audit events, consent records, quote/order APIs, private S3 pre-signed KYC uploads, AWS Textract OCR extraction, and a WhatsApp Cloud API webhook + outbound messaging endpoint.
+- Catalogue prices are indicative ranges from the case prototype, not live Airtel prices.
+- Eligibility rules are prototype catalogue rules, not Airtel serviceability or credit decisions.
+- GSTIN/Udyam extraction is not an authenticity check. Final verification requires an authorised reviewer and an approved integration.
+- Local profile, bundle, quote draft and journey state are stored in the current browser. They are not a shared customer account or a durable Airtel CRM record.
+- The UI distinguishes estimates, draft requests, pending review and completed states. No Airtel order, payment, service activation or government verification is claimed unless a real integration confirms it.
+- The journey prediction model is trained on synthetic sequences. Its scores are prototype guidance, not validated customer-intent probabilities and must not be used for eligibility, KYC, pricing or operational decisions.
+- The deployed environment currently has the Groq and Gemini assistant credentials configured. Firebase persistence, private AWS document storage/Textract, WhatsApp Cloud API and Airtel CRM/catalogue/order integrations are optional backend adapters and must be provisioned and tested before those capabilities can be treated as live.
 
-See [API setup and integration guide](api/README.md) and [.env.example](.env.example). The backend is a deployable integration foundation, not yet a live Airtel production integration: provision Firebase Realtime Database credentials and AWS resources, Meta WhatsApp Business credentials and authorized Airtel API credentials, then configure Vercel environment variables and configure RTDB rules and provision the first administrator account. OCR is extraction only and requires human verification. A durable background queue, WhatsApp template dispatch, Meta webhook signature verification, rate limiting, monitoring and full end-to-end tests remain production hardening tasks.
+## Technology
 
+- **Frontend:** responsive HTML, CSS and JavaScript; browser-native voice input/output; browser OCR with Tesseract.js and PDF.js for Smart KYC.
+- **Assistant:** Groq chat completion with Gemini multimodal file analysis; server-side credentials and structured catalogue context.
+- **Backend foundation:** Express on Vercel, JWT authentication, role-based access, Firebase Realtime Database adapter, audit events, S3 pre-signed uploads, AWS Textract OCR and WhatsApp Cloud API adapter.
+- **Analytics:** deterministic catalogue and budget rules, explainable recommendation signals, user-entered ROI scenarios and a synthetic journey model.
 
-## Growth Cockpit
+## Run locally
 
-The Growth Cockpit adds:
-- Explainable Essential / Growth / Complete bundle options constrained by the catalogue eligibility rules and a monthly budget.
-- A business-value simulator for user-entered savings, incremental gross profit, monthly service cost and setup payback.
-- WhatsApp-ready quote, KYC, activation and follow-up message previews with a click-to-open WhatsApp draft.
-- A conversion control tower prioritising quote transparency, quote simplicity, follow-up speed and KYC completion using the supplied synthetic funnel.
-- A Bundle Passport decision trace across profile, quote, KYC and order status.
+```bash
+npm install
+npm run dev
+```
 
-All optimiser recommendations are deterministic catalogue heuristics, not an AI claim. ROI is scenario modelling from user-entered assumptions, not a guaranteed outcome. WhatsApp draft links do not send messages through the Cloud API; live delivery requires Meta credentials, valid opt-in, approved templates where applicable, and the configured backend.
+The frontend can also be served as static files, but assistant and API features require their server-side environment variables. Run the API smoke tests with:
 
+```bash
+npm test
+```
 
-## AI assistant configuration
+## Backend configuration
 
-The Udyam chat uses Groq's OpenAI-compatible Chat Completions API through the server-side `POST /api/assistant/chat` endpoint. Set `GROQ_API_KEY` in Vercel Project Settings → Environment Variables (Preview and Production), and optionally set `GROQ_MODEL` (defaults to `llama-3.3-70b-versatile`). Never place the key in `index.html` or any `NEXT_PUBLIC_` variable. The assistant uses the latest user message, recent chat history, business context and eligible catalogue as grounding. It validates structured responses, restricts profile edits to explicit edit requests, filters selected products against the eligible catalogue, and does not fall back to a generic scripted answer if Groq is unavailable. The endpoint sends the current business profile, recent chat turns and catalogue eligibility/price context to the model. Model-suggested catalogue SKUs are filtered against the server-provided eligible list; quote totals and eligibility remain deterministic application logic.
+See [API setup and integration guide](api/README.md) and [.env.example](.env.example). Create the first staff administrator only after Firebase is provisioned, using the one-time secure provisioning script:
 
-The chat shows task-specific activity labels for profile edits, recommendations, pricing, KYC, tracking, troubleshooting and general questions. These labels describe the request workflow; they are not a display of the model's private reasoning. Chat history is held in the current page session. Requests are sent to Gemini with JSON response formatting. Configure appropriate Google AI usage limits before public demos.
+```bash
+ADMIN_EMAIL=... ADMIN_NAME=... ADMIN_PASSWORD=... npm run admin:create
+```
 
+Never expose service-account credentials, JWT secrets or provider API keys in frontend code.
 
-## ML-powered next-step guidance
+## Competition demonstration
 
-The customer journey guide calls `POST /api/journey/predict` and uses a multiclass logistic-regression model to rank the next useful action from the current journey stage and minimised in-session signals (service views, quote views, help requests, backtracking, profile completeness and budget fit). The model artifact is in `api/lib/journey-model.js`.
+Recommended live walkthrough:
+1. Start as a small business and describe a real operational problem.
+2. Let the assistant ask focused questions or inspect a redacted business photo/floor plan.
+3. Show why the recommended services fit the business and compare a budget-constrained bundle.
+4. Generate the indicative estimate and export the Bundle Passport.
+5. Demonstrate Smart KYC extraction and clearly show that human review is still required.
+6. Finish with the next-step guidance and Growth Cockpit, explaining which analytics are synthetic and which decisions are deterministic.
 
-**Important limitation:** the current model was trained and held out against synthetic journey sequences because no consented, labelled Airtel customer journey dataset is connected. Its confidence is model confidence on this synthetic prototype, not a validated probability of an individual customer's intent and not evidence of business performance. The UI falls back to transparent journey-state guidance if the prediction endpoint is unavailable. Pricing, eligibility, verification and order transitions remain deterministic and authoritative. Do not use this model for customer eligibility, credit, KYC, pricing or operational decisions.
-
-To improve it responsibly, replace the synthetic training set with consented, pseudonymised journey events and labelled next actions; evaluate calibration, top-k ranking, segment fairness and online uplift before production use.
+The prototype is designed to demonstrate the customer experience and integration architecture. It is not a production Airtel onboarding channel until authorised Airtel systems, identity, serviceability, pricing, order management and fulfilment integrations are connected.
