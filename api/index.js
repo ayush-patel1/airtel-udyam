@@ -176,7 +176,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
       body:JSON.stringify({
         model:process.env.GROQ_MODEL||"llama-3.3-70b-versatile",
         messages:[{role:"system",content:system},{role:"user",content:JSON.stringify(safeContext)}],
-        temperature:0.35,max_tokens:650,response_format:{type:"json_object"}
+        temperature:0.35,max_tokens:650,...((process.env.GROQ_MODEL||"").startsWith("openai/gpt-oss-")?{reasoning_format:"hidden",reasoning_effort:"low"}:{}),response_format:{type:"json_object"}
       })
     });
   }catch(error){
