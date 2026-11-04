@@ -10,7 +10,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
 import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { predictJourney } from "./lib/journey-model.js";
-import { CATALOGUE, CATALOGUE_VERSION } from "./lib/catalogue.js";
+import { buildEstimate } from "./lib/quote-engine.js";
+import { CATALOGUE_VERSION } from "./lib/catalogue.js";
 
 const app = express();
 const prisma = createFirebaseStore();
@@ -285,29 +286,12 @@ app.post("/api/quotes",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(quoteSchema,req.body);
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
-  if(!business.cityTier||!business.segment)return res.status(400).json({error:"Complete the business location and segment before preparing an estimate"});
-  const skus=input.items.map(item=>item.sku);
-  if(new Set(skus).size!==skus.length)return res.status(400).json({error:"Each catalogue service can appear only once; update its quantity instead"});
-  const selected=new Set(skus),pricedItems=[];
-  for(const item of input.items){
-    const product=CATALOGUE.get(item.sku);
-    if(!product)return res.status(400).json({error:"Unknown catalogue service: "+item.sku});
-    if(!product.cityTiers.includes(String(business.cityTier)))return res.status(409).json({error:product.name+" is not eligible for the selected city tier"});
-    if(!product.segments.includes(String(business.segment)))return res.status(409).json({error:product.name+" is not eligible for the selected business segment"});
-    if(Number(business.employees||0)<product.minEmployees)return res.status(409).json({error:product.name+" requires at least "+product.minEmployees+" employees"});
-    if(Number(business.sites||1)<product.minSites)return res.status(409).json({error:product.name+" requires at least "+product.minSites+" business sites"});
-    if(product.requiresGstin&&!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(String(business.gstin||"")))return res.status(409).json({error:product.name+" requires a GSTIN to be provided for subsequent verification"});
-    if(product.dependencies.length&&!product.dependencies.some(sku=>selected.has(sku)))return res.status(409).json({error:product.name+" requires a compatible base connectivity service"});
-    pricedItems.push({sku:product.sku,name:product.name,category:product.category,unit:product.unit,quantity:item.quantity,monthlyMin:product.monthlyMin,monthlyMax:product.monthlyMax,setupFee:product.setupFee,contractMonths:product.contractMonths});
-  }
-  const monthlyMin=pricedItems.reduce((sum,item)=>sum+item.monthlyMin*item.quantity,0);
-  const monthlyMax=pricedItems.reduce((sum,item)=>sum+item.monthlyMax*item.quantity,0);
-  const setupTotal=pricedItems.reduce((sum,item)=>sum+item.setupFee*item.quantity,0);
-  const contractMonths=Math.max(...pricedItems.map(item=>item.contractMonths));
+  const estimate=buildEstimate(business,input.items);
+  const {items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths}=estimate;
   const quote=await prisma.quote.create({data:{
     quoteNumber:"EST-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),
     businessId:business.id,items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths,
-    ruleVersion:CATALOGUE_VERSION,pricingSource:"CASE_CATALOGUE_ESTIMATE",status:"DRAFT_ESTIMATE"
+    ruleVersion:estimate.ruleVersion,pricingSource:estimate.pricingSource,status:estimate.status
   }});
   await audit(req,"ESTIMATE_CREATED","Quote",quote.id,{quoteNumber:quote.quoteNumber,monthlyMin,monthlyMax,catalogueVersion:CATALOGUE_VERSION});
   res.status(201).json({quote,notice:"Indicative case-study catalogue estimate only; not a live Airtel quotation."});
