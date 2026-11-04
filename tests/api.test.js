@@ -93,7 +93,15 @@ test("quote engine rejects duplicate and unknown SKUs", () => {
 
 test("customer-facing inline JavaScript parses without syntax errors", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-  const scripts = [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
+  const scripts = [];
+  let cursor = 0;
+  while ((cursor = html.indexOf("<script>", cursor)) >= 0) {
+    const start = cursor + "<script>".length;
+    const end = html.indexOf("</script>", start);
+    if (end < 0) break;
+    scripts.push(html.slice(start, end));
+    cursor = end + "</script>".length;
+  }
   assert.ok(scripts.length > 0, "expected at least one inline application script");
   for (const script of scripts) new Function(script[1]);
 });
