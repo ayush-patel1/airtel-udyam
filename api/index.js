@@ -385,7 +385,7 @@ app.post("/api/orders",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   res.status(201).json({order});
 }));
 app.get("/api/orders/review-queue",auth,allow("ADMIN","REVIEWER","OPERATIONS"),asyncRoute(async(req,res)=>{
-  const orders=await prisma.order.findMany({where:{status:"UNDER_REVIEW"},include:{
+  const orders=await prisma.order.findMany({where:{status:{in:["KYC_PENDING","UNDER_REVIEW"]}},include:{
     business:{select:{id:true,name:true,city:true,segment:true}},
     quote:{select:{id:true,quoteNumber:true,monthlyMin:true,monthlyMax:true,setupTotal:true,status:true}}
   },orderBy:{createdAt:"asc"},take:100});
@@ -396,10 +396,10 @@ app.patch("/api/orders/:id/status",auth,allow("ADMIN","REVIEWER","OPERATIONS"),a
   const order=await prisma.order.findUnique({where:{id:req.params.id}});
   if(!order)return res.status(404).json({error:"Order not found"});
   if(!transitions[order.status]?.includes(input.status))return res.status(409).json({error:`Transition ${order.status} → ${input.status} is not allowed`});
-  if(input.status==="APPROVED"){
+  if(input.status==="UNDER_REVIEW"||input.status==="APPROVED"){
     const documents=await prisma.kycDocument.findMany({where:{businessId:order.businessId}});
     if(!documents.length)return res.status(409).json({error:"No business verification documents have been submitted"});
-    if(documents.some(doc=>doc.reviewStatus!=="VERIFIED"))return res.status(409).json({error:"Every submitted KYC document must be verified before order approval"});
+    if(documents.some(doc=>doc.reviewStatus!=="VERIFIED"))return res.status(409).json({error:"Every submitted KYC document must be verified before business review or approval"});
   }
   const milestones=Array.isArray(order.milestones)?order.milestones:[];
   milestones.push({status:input.status,at:new Date().toISOString(),actor:req.user.sub});
