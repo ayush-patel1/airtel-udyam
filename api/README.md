@@ -9,7 +9,9 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - `CORS_ORIGINS` — comma-separated allowed frontend origins.
 - `AWS_REGION`, `AWS_S3_BUCKET` — private S3 bucket for KYC documents. Configure KMS encryption, block public access, lifecycle/retention and least-privilege IAM.
 - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
-- `OPENAI_API_KEY` — reserved for the conversational intent/extraction adapter; never expose it to the browser.
+- `GROQ_API_KEY` — server-side Groq API key used by the Udyam Assistant; never expose it to the browser.
+- `GROQ_MODEL` — optional model override; defaults to `llama-3.3-70b-versatile`.
+- `GEMINI_API_KEY` — optional, used only for interface translation.
 - `AIRTEL_API_BASE_URL`, `AIRTEL_API_TOKEN` — reserved for Airtel catalogue/CRM/order/provisioning integration after API access is authorized.
 
 ## Setup
