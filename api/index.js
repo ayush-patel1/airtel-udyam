@@ -137,7 +137,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   const input=validate(z.object({
     message:z.string().trim().min(1).max(4000),
     history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
-    business:z.record(z.string(),z.unknown()).optional(),
+    business:z.record(z.string(),z.unknown()).nullable().optional(),
     catalogue:z.array(z.object({sku:z.string(),name:z.string(),category:z.string(),description:z.string().optional(),monthlyMin:z.number(),monthlyMax:z.number(),setupFee:z.number(),eligible:z.boolean(),reason:z.string().optional()})).max(40).default([]),
     editMode:z.boolean().default(false),language:z.enum(["auto","en","hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]).default("auto")
   }),req.body);
