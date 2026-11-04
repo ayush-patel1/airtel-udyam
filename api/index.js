@@ -149,6 +149,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     editMode:z.boolean().default(false),language:z.enum(["auto","en","hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]).default("auto")
   }),req.body);
   if(!input.message && !input.attachments.length)return res.status(400).json({error:"Write a message or attach a file."});
+  const userMessage=input.message||"Please review the attached business materials and recommend relevant services from the available catalogue.";
   const attachmentBytes=input.attachments.reduce((sum,file)=>sum+Math.floor(file.dataBase64.length*3/4),0);
   if(attachmentBytes>8*1024*1024)return res.status(413).json({error:"Please keep all attachments together under 8 MB."});
   const now=Date.now(),key=req.ip||"unknown",recent=(assistantRequests.get(key)||[]).filter(t=>now-t<60000);
@@ -208,7 +209,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     eligibleCatalogue:eligible,
     editMode:input.editMode,
     conversation:input.history.slice(-8),
-    latestUserMessage:input.message
+    latestUserMessage:userMessage
   };
   let upstream;
   try{
@@ -237,7 +238,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   result.profile_updates=Object.fromEntries(fields.map(k=>[k,input.editMode?(result.profile_updates[k]??null):null]));
   result.selected_skus=[...new Set(result.selected_skus.filter(sku=>typeof sku==="string"&&eligible.some(x=>x.sku===sku)))].slice(0,8);
   if(!input.editMode)result.profile_updates=Object.fromEntries(fields.map(k=>[k,null]));
-  if(!/recommend|suggest|bundle|service|product|add|select/i.test(input.message))result.selected_skus=[];
+  if(!/recommend|suggest|bundle|service|product|add|select/i.test(userMessage))result.selected_skus=[];
   res.set("Cache-Control","no-store");
   res.json({result,provider:"groq",model:process.env.GROQ_MODEL||"llama-3.3-70b-versatile"});
 }));
