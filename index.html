@@ -483,11 +483,7 @@ function resetCopilot(){if(!confirm("Start a new conversation? Your saved profil
 function renderCopilotContext(){if($("widgetContext"))$("widgetContext").textContent=state.profile?(state.profile.name+" · "+state.profile.city+" · "+state.profile.employees+" employees"):"Tell me what your business needs. I’ll help you find the right Airtel services.";if(!$("chatBizName"))return;const p=state.profile;$("chatBizName").textContent=p?.name||"Not set up yet";$("chatBizMeta").textContent=p?p.city+" · "+p.employees+" employees · "+p.sites+" site(s)":"Tell me about your business to begin.";$("chatStep1").textContent=p?"✓":"○";$("chatStep2").textContent=state.quote?"✓":"○";$("chatStep3").textContent=state.kyc?"✓":"○";$("chatStep4").textContent=state.order?.stage>=4?"✓":"○"}
 let assistantHistory=[];
 function localAssistantFallback(message){
- const t=String(message||"").toLowerCase();
- if(/track|status|activation|order|installation|progress/.test(t)){go("tracker");return "Let's follow your activation journey. The tracker shows the current milestone and what remains. If you have not created a quote and order yet, start with your business profile and bundle first."}
- if(/kyc|gstin|udyam|verify|document|consent|registration/.test(t)){go("kyc");return "Let's complete business verification. Review the requirements and consent on this page. Format checks and sample registry lookups are not official government verification; uncertain cases may need human review."}
- if(/quote|price|cost|₹|budget|bundle|service|product|recommend/.test(t)){go("quote");renderProducts();return "Let's build a suitable bundle. Explore eligible services, review the catalogue prices and create your quote and Bundle Passport. Eligibility and prices are catalogue-driven."}
- go("advisor");hydrateAdvisorForm();return "I'll guide you through the complete journey: save your business profile, choose eligible services and create a quote, complete business verification, then track activation. Let's begin with your business profile.";
+ return "I’m sorry, I couldn’t reach the assistant just now, so I haven’t answered your question yet. Please try sending it again in a moment.";
 }
 function addAssistantNextStep(bubble,label,view){const button=document.createElement("button");button.className="chat-action";button.type="button";button.textContent=label+" →";button.addEventListener("click",()=>go(view));bubble.appendChild(document.createElement("br"));bubble.appendChild(button)}
 function classifyAssistantTask(message){
