@@ -384,6 +384,13 @@ app.post("/api/orders",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   await audit(req,"ORDER_CREATED","Order",order.id);
   res.status(201).json({order});
 }));
+app.get("/api/orders/review-queue",auth,allow("ADMIN","REVIEWER","OPERATIONS"),asyncRoute(async(req,res)=>{
+  const orders=await prisma.order.findMany({where:{status:"UNDER_REVIEW"},include:{
+    business:{select:{id:true,name:true,city:true,segment:true}},
+    quote:{select:{id:true,quoteNumber:true,monthlyMin:true,monthlyMax:true,setupTotal:true,status:true}}
+  },orderBy:{createdAt:"asc"},take:100});
+  res.set("Cache-Control","no-store");res.json({orders});
+}));
 app.patch("/api/orders/:id/status",auth,allow("ADMIN","REVIEWER","OPERATIONS"),asyncRoute(async(req,res)=>{
   const input=validate(z.object({status:z.enum(["KYC_PENDING","UNDER_REVIEW","APPROVED","REJECTED","PROVISIONING","ACTIVE","CANCELLED"])}),req.body);
   const order=await prisma.order.findUnique({where:{id:req.params.id}});
