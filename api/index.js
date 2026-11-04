@@ -392,8 +392,14 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
   res.sendStatus(200);
 }));
 app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
-  const input=validate(z.object({to:z.string().regex(/^\+?[1-9]\d{7,14}$/),text:z.string().min(1).max(4096),businessId:z.string().optional()}),req.body);
+  const input=validate(z.object({to:z.string().regex(/^\+?[1-9]\d{7,14}$/),text:z.string().min(1).max(4096),businessId:z.string().min(1)}),req.body);
   if(!process.env.WHATSAPP_TOKEN||!process.env.WHATSAPP_PHONE_NUMBER_ID)return res.status(503).json({error:"WhatsApp Cloud API credentials are not configured"});
+  const business=await prisma.business.findUnique({where:{id:input.businessId}});
+  if(!business)return res.status(404).json({error:"Business not found"});
+  const normalisePhone=value=>String(value||"").replace(/\D/g,"");
+  if(!business.phone||normalisePhone(business.phone)!==normalisePhone(input.to))return res.status(403).json({error:"Messages can only be sent to the contact number recorded for this business"});
+  const consent=await prisma.consent.findFirst({where:{businessId:business.id,channel:"WHATSAPP"},orderBy:{createdAt:"desc"}});
+  if(!consent?.granted)return res.status(403).json({error:"Current WhatsApp messaging consent is required before sending a message"});
   const response=await fetch(`https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION||"v23.0"}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{
     method:"POST",headers:{Authorization:`Bearer ${process.env.WHATSAPP_TOKEN}`,"Content-Type":"application/json"},
     body:JSON.stringify({messaging_product:"whatsapp",recipient_type:"individual",to:input.to.replace("+",""),type:"text",text:{preview_url:false,body:input.text}})
