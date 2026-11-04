@@ -24,6 +24,15 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 6. In Meta Developer dashboard, configure the WhatsApp webhook URL as `https://YOUR_DOMAIN/api/webhooks/whatsapp`, verify token, and subscribe to `messages`.
 7. Uploads use short-lived signed URLs; browser PUT must include the returned Content-Type header. The KYC OCR endpoint sends the stored S3 object to Textract.
 
+## Quote integrity and reviewer workflow
+
+- `POST /api/quotes` is restricted to `ADMIN` and `SALES` staff. The request contains only `businessId` and `items: [{ sku, quantity }]`; client-supplied prices are not accepted.
+- The API loads the canonical case-study catalogue from `api/lib/catalogue.js`, validates city tier, segment, team size, site count, GSTIN format and product dependencies, then calculates the monthly range, setup total and minimum contract on the server.
+- Every quote is stored as `DRAFT_ESTIMATE` with the catalogue version and `CASE_CATALOGUE_ESTIMATE` source. It is not an official Airtel offer or a live price.
+- `GET /api/kyc/queue` is restricted to `ADMIN` and `REVIEWER`. Reviewers can request a short-lived document download URL from `GET /api/kyc/:documentId/download-url`, run OCR, then mark a document `VERIFIED`, `REJECTED` or `NEEDS_CORRECTION`.
+- Order approval is blocked unless at least one verification document exists and every submitted document has been marked `VERIFIED`. This is a workflow guard, not a government authenticity check.
+- The static customer experience currently saves its profile, estimate and Smart KYC checks in the browser. The staff APIs are an integration foundation and are not connected to a live Airtel reviewer queue in the deployed environment until Firebase, AWS and authorised staff accounts are provisioned.
+
 ## WhatsApp workflow
 
 - Inbound WhatsApp webhooks require a valid `X-Hub-Signature-256` HMAC-SHA256 signature using `WHATSAPP_APP_SECRET` before events are persisted idempotently in `IntegrationEvent` and `Message`.
