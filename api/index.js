@@ -13,7 +13,7 @@ import { predictJourney } from "./lib/journey-model.js";
 
 const app = express();
 const prisma = createFirebaseStore();
-const jsonParser = express.json({ limit: "12mb" });
+const jsonParser = express.json({ limit: "4mb" });
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: (process.env.CORS_ORIGINS || "").split(",").filter(Boolean), credentials: true }));
@@ -141,7 +141,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     attachments:z.array(z.object({
       name:z.string().min(1).max(180),
       mimeType:z.enum(["application/pdf","image/jpeg","image/png"]),
-      dataBase64:z.string().min(100).max(5600000)
+      dataBase64:z.string().min(100).max(1500000)
     })).max(3).default([]),
     history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
     business:z.record(z.string(),z.unknown()).nullable().optional(),
@@ -151,7 +151,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
   if(!input.message && !input.attachments.length)return res.status(400).json({error:"Write a message or attach a file."});
   const userMessage=input.message||"Please review the attached business materials and recommend relevant services from the available catalogue.";
   const attachmentBytes=input.attachments.reduce((sum,file)=>sum+Math.floor(file.dataBase64.length*3/4),0);
-  if(attachmentBytes>8*1024*1024)return res.status(413).json({error:"Please keep all attachments together under 8 MB."});
+  if(attachmentBytes>2.5*1024*1024)return res.status(413).json({error:"Please keep all attachments together under 2.5 MB."});
   const now=Date.now(),key=req.ip||"unknown",recent=(assistantRequests.get(key)||[]).filter(t=>now-t<60000);
   if(recent.length>=12)return res.status(429).json({error:"Please wait a moment before sending another message."});
   recent.push(now);assistantRequests.set(key,recent);
