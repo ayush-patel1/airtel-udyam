@@ -556,15 +556,35 @@ function renderAssistantAttachments(){
  box.innerHTML=assistantPendingFiles.map((file,index)=>'<div class="assistant-file-chip"><span title="'+escHtml(file.name)+'">📎 '+escHtml(file.name)+'</span><button type="button" aria-label="Remove '+escHtml(file.name)+'" onclick="removeAssistantFile('+index+')">×</button></div>').join("");
  box.classList.toggle("hidden",assistantPendingFiles.length===0);
 }
-function handleAssistantFiles(fileList){
+async function compressAssistantImage(file){
+ if(file.type==="application/pdf"||file.size<=850*1024)return file;
+ if(typeof createImageBitmap!=="function")throw new Error("This browser cannot compress large images. Please choose an image under 850 KB.");
+ const bitmap=await createImageBitmap(file),scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+ const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+ const context=canvas.getContext("2d");context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+ let blob=null;
+ for(const quality of [0.84,0.76,0.68,0.58]){
+  blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
+  if(blob&&blob.size<=1024*1024)break;
+ }
+ canvas.width=canvas.height=1;
+ if(!blob||blob.size>1024*1024)throw new Error("This image is too large to prepare. Please choose a smaller image.");
+ const name=file.name.replace(/\.[^.]+$/,"")+".jpg";
+ return new File([blob],name,{type:"image/jpeg",lastModified:Date.now()});
+}
+async function handleAssistantFiles(fileList){
  const files=Array.from(fileList||[]),accepted=[];
  for(const file of files){
   if(!["application/pdf","image/jpeg","image/png"].includes(file.type)){toast("Please choose a PDF, JPG or PNG file.");continue}
-  if(file.size>4*1024*1024){toast(file.name+" is larger than 4 MB.");continue}
   if(assistantPendingFiles.length+accepted.length>=3){toast("You can attach up to 3 files per message.");break}
-  const combined=[...assistantPendingFiles,...accepted].reduce((sum,item)=>sum+item.size,0)+file.size;
-  if(combined>8*1024*1024){toast("Please keep all attachments together under 8 MB.");break}
-  accepted.push(file);
+  try{
+   if(file.type==="application/pdf"&&file.size>1024*1024){toast(file.name+" is larger than 1 MB. Please use a compressed PDF.");continue}
+   if(file.size>12*1024*1024){toast(file.name+" is too large to process in the browser.");continue}
+   const prepared=await compressAssistantImage(file);
+   const combined=[...assistantPendingFiles,...accepted].reduce((sum,item)=>sum+item.size,0)+prepared.size;
+   if(combined>2.5*1024*1024){toast("Please keep all prepared attachments together under 2.5 MB.");break}
+   accepted.push(prepared);
+  }catch(error){toast(error.message||"Could not prepare that file.");}
  }
  assistantPendingFiles.push(...accepted);renderAssistantAttachments();
  if($("assistantFileInput"))$("assistantFileInput").value="";
@@ -693,5 +713,5 @@ restore();hydrateAdvisorForm();renderPassport();renderTracker();renderProducts()
  <div class="widget-head"><div class="widget-brand"><div class="widget-mark"><span class="robot-face"><i class="robot-eye"></i><i class="robot-eye"></i><i class="robot-mouth"></i></span></div><div><b>Udyam Assistant</b><small><i></i> Here to help your business</small></div></div><div class="widget-controls"><button onclick="toggleAssistant(false)" aria-label="Minimise chat">−</button><button onclick="toggleAssistant(false)" aria-label="Close chat">×</button></div></div>
  <div class="widget-context" id="widgetContext">Tell me what your business needs. I’ll help you find the right Airtel services.</div>
  <div class="chat-stream widget-stream" id="chatStream" aria-live="polite"><div class="chat-day">YOUR BUSINESS ASSISTANT</div><div class="chat-msg assistant"><div class="chat-avatar">A</div><div class="chat-bubble"><b>Namaste! I’m your Airtel Udyam assistant.</b><p>Tell me what kind of business you run and what you’re trying to achieve. I can compare services, explain costs and guide you through onboarding.</p><p>For example: “I run a clinic in Raipur with 12 employees. I need reliable internet and appointment reminders.”</p></div></div><div class="suggestion-row widget-suggestions"><button onclick="usePrompt('Help me choose suitable Airtel Business services for my clinic and explain why each one may help.')">🏥 Set up a clinic</button><button onclick="usePrompt('Help me digitise my retail store with services from the available catalogue.')">🛍 Digitise my store</button><button onclick="usePrompt('Compare the business internet options shown on this website and explain what I should consider.')">🌐 Compare internet</button></div><div class="assistant-help-tips"><b>Not sure what to ask?</b><p>Tell me your business type, team size, city, budget and biggest challenge. You can also attach a shop photo, floor plan, service brochure or a bill with personal details hidden.</p><p>I can explain what I can see and suggest relevant catalogue options. Recommendations from uploads are preliminary, not a site survey or serviceability confirmation.</p><div class="tip-prompts"><button onclick="usePrompt('I am not sure what my business needs. Ask me a few questions and help me identify useful services.')">Help me get started</button><button onclick="usePrompt('Help me prioritise the most useful business services within my monthly budget.')">Work within my budget</button></div></div></div>
- <div class="chat-compose widget-compose"><div id="assistantAttachmentList" class="assistant-attachments hidden" aria-live="polite"></div><div class="compose-box"><input id="assistantFileInput" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden onchange="handleAssistantFiles(this.files)"><button class="assistant-attach-btn" type="button" onclick="$('assistantFileInput').click()" aria-label="Attach a business file or image" title="Attach a PDF, JPG or PNG">＋</button><textarea id="chatInput" rows="2" placeholder="Message Udyam Assistant…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCopilotMessage()}"></textarea><button class="voice-btn" id="voiceMicBtn" type="button" onclick="handleVoiceButton()" aria-label="Speak your message" title="Speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"></path></svg></button><button class="send-btn" onclick="sendCopilotMessage()" aria-label="Send message">➤</button></div><span class="voice-status" id="voiceStatus" role="status" aria-live="polite"></span><p class="assistant-upload-note">Up to 3 files · PDF, JPG or PNG · 4 MB each. Please hide account numbers, phone numbers and personal IDs before uploading. Do not upload official KYC documents here.</p></div>
+ <div class="chat-compose widget-compose"><div id="assistantAttachmentList" class="assistant-attachments hidden" aria-live="polite"></div><div class="compose-box"><input id="assistantFileInput" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden onchange="handleAssistantFiles(this.files)"><button class="assistant-attach-btn" type="button" onclick="$('assistantFileInput').click()" aria-label="Attach a business file or image" title="Attach a PDF, JPG or PNG">＋</button><textarea id="chatInput" rows="2" placeholder="Message Udyam Assistant…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCopilotMessage()}"></textarea><button class="voice-btn" id="voiceMicBtn" type="button" onclick="handleVoiceButton()" aria-label="Speak your message" title="Speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"></path></svg></button><button class="send-btn" onclick="sendCopilotMessage()" aria-label="Send message">➤</button></div><span class="voice-status" id="voiceStatus" role="status" aria-live="polite"></span><p class="assistant-upload-note">Up to 3 files · PDF, JPG or PNG. Images are compressed before sending; PDFs up to 1 MB. Hide personal and financial details. Do not upload official KYC documents here.</p></div>
 </div></body></html>
