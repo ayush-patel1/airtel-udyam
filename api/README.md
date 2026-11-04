@@ -4,8 +4,11 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 
 ## Required environment variables
 
-- `FIREBASE_DATABASE_URL` — Firebase Realtime Database URL.\n- `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase Admin service-account JSON (server-side only). `FIREBASE_SERVICE_ACCOUNT_JSON` is also accepted.
-- `JWT_SECRET` — random secret, minimum 32 characters.\n- `DATA_ENCRYPTION_KEY` — base64-encoded 32-byte AES-256-GCM key. Generate with `openssl rand -base64 32`.\n- `TOKENIZATION_SECRET` — independent random secret of at least 32 bytes. Generate with `openssl rand -hex 32`.
+- `FIREBASE_DATABASE_URL` — Firebase Realtime Database URL.
+- `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase Admin service-account JSON (server-side only). `FIREBASE_SERVICE_ACCOUNT_JSON` is also accepted.
+- `JWT_SECRET` — random secret, minimum 32 characters.
+- `DATA_ENCRYPTION_KEY` — base64-encoded 32-byte AES-256-GCM key. Generate with `openssl rand -base64 32`.
+- `TOKENIZATION_SECRET` — independent random secret of at least 32 bytes. Generate with `openssl rand -hex 32`.
 - `CORS_ORIGINS` — comma-separated allowed frontend origins.
 - `AWS_REGION`, `AWS_S3_BUCKET` — private S3 bucket for KYC documents. Configure KMS encryption, block public access, lifecycle/retention and least-privilege IAM.
 - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, optional `WHATSAPP_API_VERSION` — Meta WhatsApp Cloud API credentials.
@@ -17,7 +20,8 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 ## Setup
 
 1. Provision Firebase Realtime Database and set `FIREBASE_DATABASE_URL` plus the service-account credential.
-2. Generate and configure `DATA_ENCRYPTION_KEY` and `TOKENIZATION_SECRET` before storing business identifiers, OCR text or message content. Keep backups of the keys in a secure secret manager; losing the encryption key makes ciphertext unrecoverable.\n3. Run `npm install`. This repository uses the Firebase Realtime Database adapter; there are no Prisma migration or `db:generate` scripts.
+2. Generate and configure `DATA_ENCRYPTION_KEY` and `TOKENIZATION_SECRET` before storing business identifiers, OCR text or message content. Keep backups of the keys in a secure secret manager; losing the encryption key makes ciphertext unrecoverable.
+3. Run `npm install`. This repository uses the Firebase Realtime Database adapter; there are no Prisma migration or `db:generate` scripts.
 4. Create the first ADMIN account using a secure, one-time provisioning script (do not expose public signup).
 5. Configure the environment variables in Vercel Project Settings.
 6. Deploy. Verify `GET /api/health` and, after staff sign-in, `GET /api/admin/integrations`. Run `npm test` for API smoke tests.
@@ -44,7 +48,8 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 ## Security notes
 
 - API access uses short-lived JWTs and role checks. No public user registration or default admin is provided.
-- Keep credentials only in Vercel environment variables / secret manager.\n- Business phone/email/GSTIN/Udyam values, OCR text and WhatsApp message content are AES-256-GCM encrypted at rest. Separate HMAC-SHA256 tokens support matching without exposing source values. Consent/audit IP evidence is tokenized. The encryption and tokenization keys are mandatory for sensitive writes; do not log or return ciphertext or tokens to the browser.
+- Keep credentials only in Vercel environment variables / secret manager.
+- Business phone/email/GSTIN/Udyam values, OCR text and WhatsApp message content are AES-256-GCM encrypted at rest. Separate HMAC-SHA256 tokens support matching without exposing source values. Consent/audit IP evidence is tokenized. The encryption and tokenization keys are mandatory for sensitive writes; do not log or return ciphertext or tokens to the browser.
 - Restrict CORS to the production frontend domain.
 - Use private S3 with KMS, signed URLs, retention policies and access logging.
 - OCR is extraction only; it does not authenticate documents. Human review is mandatory.
