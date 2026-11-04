@@ -50,3 +50,12 @@ All optimiser recommendations are deterministic catalogue heuristics, not an AI 
 The Udyam chat uses the Google Gemini `generateContent` API through the server-side `POST /api/assistant/chat` endpoint. Set `GEMINI_API_KEY` in Vercel Project Settings → Environment Variables (Production and Preview), and optionally set `GEMINI_MODEL` (defaults to `gemini-3.8-flash`). Never place the key in `index.html` or any `NEXT_PUBLIC_` variable. The endpoint sends the current business profile, recent chat turns and catalogue eligibility/price context to the model. Model-suggested catalogue SKUs are filtered against the server-provided eligible list; quote totals and eligibility remain deterministic application logic.
 
 The chat shows task-specific activity labels for profile edits, recommendations, pricing, KYC, tracking, troubleshooting and general questions. These labels describe the request workflow; they are not a display of the model's private reasoning. Chat history is held in the current page session. Requests are sent to Gemini with JSON response formatting. Configure appropriate Google AI usage limits before public demos.
+
+
+## ML-powered next-step guidance
+
+The customer journey guide calls `POST /api/journey/predict` and uses a multiclass logistic-regression model to rank the next useful action from the current journey stage and minimised in-session signals (service views, quote views, help requests, backtracking, profile completeness and budget fit). The model artifact is in `api/lib/journey-model.js`.
+
+**Important limitation:** the current model was trained and held out against synthetic journey sequences because no consented, labelled Airtel customer journey dataset is connected. Its confidence is model confidence on this synthetic prototype, not a validated probability of an individual customer's intent and not evidence of business performance. The UI falls back to transparent journey-state guidance if the prediction endpoint is unavailable. Pricing, eligibility, verification and order transitions remain deterministic and authoritative. Do not use this model for customer eligibility, credit, KYC, pricing or operational decisions.
+
+To improve it responsibly, replace the synthetic training set with consented, pseudonymised journey events and labelled next actions; evaluate calibration, top-k ranking, segment fairness and online uplift before production use.
