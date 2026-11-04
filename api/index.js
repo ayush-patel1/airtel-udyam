@@ -12,6 +12,7 @@ import { randomUUID, createHash, createHmac, timingSafeEqual } from "node:crypto
 import { predictJourney } from "./lib/journey-model.js";
 import { buildEstimate } from "./lib/quote-engine.js";
 import { CATALOGUE_VERSION } from "./lib/catalogue.js";
+import { encryptSensitive, decryptSensitive, tokenizeSensitive } from "./lib/crypto-vault.js";
 
 const app = express();
 const prisma = createFirebaseStore();
@@ -33,9 +34,18 @@ const secret = () => {
 };
 const asyncRoute = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 const audit = (req, action, entityType, entityId, metadata={}) => prisma.auditEvent.create({
-  data:{ actorId:req.user?.sub || null, action, entityType, entityId, ipAddress:req.ip, metadata }
+  data:{ actorId:req.user?.sub || null, action, entityType, entityId, ipAddress:req.ip?tokenizeSensitive(req.ip,"audit-ip"):null, metadata }
 });
-const mask = value => value ? value.replace(/^(.{3}).*(.{3})$/, "$1••••••$2") : null;
+const mask = value => value ? String(value).replace(/^(.{3}).*(.{3})$/, "$1••••••$2") : null;
+const maskEmail = value => {if(!value)return null;const [local,domain]=String(value).split("@");return domain?(local.slice(0,1)+"•••@"+domain):mask(value)};
+const businessPublicView = business => {
+  const {phoneCiphertext,phoneToken,emailCiphertext,emailToken,gstinCiphertext,gstinToken,udyamCiphertext,udyamToken,...safe}=business;
+  const phone=decryptSensitive(phoneCiphertext)||business.phone||null;
+  const email=decryptSensitive(emailCiphertext)||business.email||null;
+  const gstin=decryptSensitive(gstinCiphertext)||business.gstin||null;
+  const udyamNumber=decryptSensitive(udyamCiphertext)||business.udyamNumber||null;
+  return {...safe,phone:mask(phone),email:maskEmail(email),gstin:mask(gstin),udyamNumber:mask(udyamNumber)};
+};
 
 async function auth(req,res,next) {
   try {
@@ -258,23 +268,32 @@ app.post("/api/auth/login", asyncRoute(async(req,res) => {
 app.get("/api/auth/me",auth,(req,res)=>res.json({user:req.user}));
 
 // Business profile and consent
-app.post("/api/businesses",auth,asyncRoute(async(req,res)=>{
+app.post("/api/businesses",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const data=validate(businessSchema,req.body);
-  const business=await prisma.business.create({data});
+  const {phone,email,gstin,udyamNumber,...profile}=data;
+  const phoneVault=encryptSensitive(phone,"business-phone"),emailVault=encryptSensitive(email,"business-email");
+  const gstinVault=encryptSensitive(gstin,"business-gstin"),udyamVault=encryptSensitive(udyamNumber,"business-udyam");
+  const business=await prisma.business.create({data:{
+    ...profile,
+    phoneCiphertext:phoneVault.ciphertext,phoneToken:phoneVault.token,
+    emailCiphertext:emailVault.ciphertext,emailToken:emailVault.token,
+    gstinCiphertext:gstinVault.ciphertext,gstinToken:gstinVault.token,
+    udyamCiphertext:udyamVault.ciphertext,udyamToken:udyamVault.token
+  }});
   await audit(req,"BUSINESS_CREATED","Business",business.id);
-  res.status(201).json({business});
+  res.status(201).json({business:businessPublicView(business)});
 }));
 app.get("/api/businesses/:id",auth,asyncRoute(async(req,res)=>{
   const b=await prisma.business.findUnique({where:{id:req.params.id},include:{quotes:{orderBy:{createdAt:"desc"},take:10},orders:{orderBy:{createdAt:"desc"},take:10}}});
   if(!b)return res.status(404).json({error:"Business not found"});
-  res.json({business:{...b,gstin:mask(b.gstin),udyamNumber:mask(b.udyamNumber)}});
+  res.set("Cache-Control","no-store");res.json({business:businessPublicView(b)});
 }));
 app.post("/api/businesses/:id/consent",auth,asyncRoute(async(req,res)=>{
   const input=validate(z.object({purpose:z.string().min(3),channel:z.enum(["WEB","WHATSAPP","MOBILE"]),version:z.string().min(1),granted:z.boolean()}),req.body);
   const business=await prisma.business.findUnique({where:{id:req.params.id}});
   if(!business)return res.status(404).json({error:"Business not found"});
   const [consent]=await prisma.$transaction([
-    prisma.consent.create({data:{businessId:business.id,...input,evidence:{ip:req.ip,userAgent:req.headers["user-agent"]||null}}}),
+    prisma.consent.create({data:{businessId:business.id,...input,evidence:{ipToken:req.ip?tokenizeSensitive(req.ip,"consent-ip"):null,userAgent:req.headers["user-agent"]||null}}}),
     prisma.business.update({where:{id:business.id},data:{consentAt:input.granted?new Date():null,consentPurpose:input.granted?input.purpose:null}})
   ]);
   await audit(req,"CONSENT_RECORDED","Business",business.id,{purpose:input.purpose,granted:input.granted,channel:input.channel});
@@ -286,7 +305,7 @@ app.post("/api/quotes",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(quoteSchema,req.body);
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
-  const estimate=buildEstimate(business,input.items);
+  const estimate=buildEstimate({...business,gstin:decryptSensitive(business.gstinCiphertext)||business.gstin||null},input.items);
   const {items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths}=estimate;
   const quote=await prisma.quote.create({data:{
     quoteNumber:"EST-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),
