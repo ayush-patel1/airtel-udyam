@@ -162,6 +162,7 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     catalogue:z.array(z.object({sku:z.string(),name:z.string(),category:z.string(),description:z.string().optional(),monthlyMin:z.number(),monthlyMax:z.number(),setupFee:z.number(),eligible:z.boolean(),reason:z.string().optional()})).max(40).default([]),
     editMode:z.boolean().default(false),language:z.enum(["auto","en","hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]).default("auto")
   }),req.body);
+  const eligible=input.catalogue.filter(item=>item.eligible);
   if(!input.message && !input.attachments.length)return res.status(400).json({error:"Write a message or attach a file."});
   const userMessage=input.message||"Please review the attached business materials and recommend relevant services from the available catalogue.";
   let attachmentInsights="";
