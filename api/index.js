@@ -214,12 +214,12 @@ app.post("/api/assistant/translate",asyncRoute(async(req,res)=>{
     });
   }catch(error){
     console.error("Groq assistant request failed",error.name||"network_error");
-    return res.status(error.name==="TimeoutError"||error.name==="AbortError"?504:502).json({error:"I couldn't reach the assistant just now. Please try again."});
+    const result=recommendFromCatalogue(input,userMessage,eligible);return res.json({result,provider:"catalogue-fallback",fallback:true});
   }
   let payload;try{payload=await upstream.json()}catch{return res.status(502).json({error:"The assistant returned an unreadable response. Please try again."})}
   if(!upstream.ok){console.error("Groq assistant error",upstream.status,payload?.error?.code||"provider_error");return res.status(502).json({error:"I couldn't prepare an answer just now. Please try again."})}
   const raw=payload?.choices?.[0]?.message?.content;
-  let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"I couldn't prepare a clear answer. Please try again."})}
+  let result;try{result=JSON.parse(raw)}catch{const fallback=recommendFromCatalogue(input,userMessage,eligible);return res.json({result:fallback,provider:"catalogue-fallback",fallback:true})}
   const fields=["name","type","city","employees","sites","budget","need"];
   if(!result||typeof result.reply!=="string"||!result.reply.trim()||!result.profile_updates||!Array.isArray(result.selected_skus)||!["none","quote","kyc","tracker","growth","advisor"].includes(result.navigation)){
     return res.status(502).json({error:"I couldn't prepare a clear answer. Please try again."});
