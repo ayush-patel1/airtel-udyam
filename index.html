@@ -779,10 +779,20 @@ async function sendCopilotMessage(){
   const answer=applyAssistantResult(data.result||{});
   assistantHistory.push({role:"user",content:(msg||"Please review my attached business materials.")+(files.length?" [Attached: "+files.map(file=>file.name).join(", ")+"]":"")},{role:"assistant",content:answer});
   assistantPendingFiles=[];renderAssistantAttachments();
-  bubble.textContent=answer;bubble.style.whiteSpace="pre-line";speakAssistantReply(answer);
- }catch(error){console.error("Udyam Assistant request failed:",error);const answer=error?.message||localAssistantFallback(msg);bubble.textContent=answer;bubble.classList.add("assistant-fallback");bubble.style.whiteSpace="pre-line";speakAssistantReply(answer);if(files.length){const retry=document.createElement("button");retry.type="button";retry.className="chat-action";retry.textContent="Retry with attached files →";retry.addEventListener("click",()=>{assistantPendingFiles=files.slice();renderAssistantAttachments();sendCopilotMessage()});bubble.appendChild(document.createElement("br"));bubble.appendChild(retry)}const t=String(msg).toLowerCase();if(/track|status|activation|order|installation|progress/.test(t))addAssistantNextStep(bubble,"Open activation tracker","tracker");else if(/kyc|gstin|udyam|verify|document|consent|registration/.test(t))addAssistantNextStep(bubble,"Continue business verification","kyc");else if(/quote|price|cost|₹|budget|bundle|service|product|recommend/.test(t))addAssistantNextStep(bubble,"Review eligible services","quote");else addAssistantNextStep(bubble,"Set up business profile","advisor")}
+  bubble.innerHTML=renderAssistantMarkdown(answer);speakAssistantReply(answer);
+ }catch(error){console.error("Udyam Assistant request failed:",error);const answer=error?.message||localAssistantFallback(msg);bubble.innerHTML=renderAssistantMarkdown(answer);bubble.classList.add("assistant-fallback");speakAssistantReply(answer);if(files.length){const retry=document.createElement("button");retry.type="button";retry.className="chat-action";retry.textContent="Retry with attached files →";retry.addEventListener("click",()=>{assistantPendingFiles=files.slice();renderAssistantAttachments();sendCopilotMessage()});bubble.appendChild(document.createElement("br"));bubble.appendChild(retry)}const t=String(msg).toLowerCase();if(/track|status|activation|order|installation|progress/.test(t))addAssistantNextStep(bubble,"Open activation tracker","tracker");else if(/kyc|gstin|udyam|verify|document|consent|registration/.test(t))addAssistantNextStep(bubble,"Continue business verification","kyc");else if(/quote|price|cost|₹|budget|bundle|service|product|recommend/.test(t))addAssistantNextStep(bubble,"Review eligible services","quote");else addAssistantNextStep(bubble,"Set up business profile","advisor")}
  finally{clearInterval(rotate);assistantRequestPending=false;if(send)send.disabled=false;renderCopilotContext();$("chatStream").scrollTop=$("chatStream").scrollHeight}
 }
+function renderAssistantMarkdown(value){
+ const source=String(value??'').replace(/\\([\\*_`#>\[\]().!+-])/g,'$1').replace(/\r/g,'');
+ const out=[];let list=null;const close=()=>{if(list){out.push(list==='ol'?'</ol>':'</ul>');list=null}};
+ for(const raw of source.split('\n')){const line=raw.trim();if(!line){close();continue}
+  const ordered=line.match(/^\d+[.)]\s+(.+)$/),bullet=line.match(/^[-*•]\s+(.+)$/);
+  if(ordered||bullet){const type=ordered?'ol':'ul';if(list!==type){close();out.push(type==='ol'?'<ol>':'<ul>');list=type}out.push('<li>'+formatInlineMarkdown(ordered?ordered[1]:bullet[1])+'</li>');continue}
+  close();if(/^#{1,3}\s+/.test(line)){out.push('<p><strong>'+formatInlineMarkdown(line.replace(/^#{1,3}\s+/,''))+'</strong></p>');continue}out.push('<p>'+formatInlineMarkdown(line)+'</p>')
+ }close();return out.join('')
+}
+function formatInlineMarkdown(value){return escHtml(value).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/__(.+?)__/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>')}
 function escHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function scoreProduct(x,goal){
  const map={growth:["Communication","Cloud & Productivity"],reliability:["Connectivity"],security:["Security","Connectivity"],operations:["Cloud & Productivity","IoT & Physical"]};
