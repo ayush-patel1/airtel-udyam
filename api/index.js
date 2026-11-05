@@ -127,6 +127,35 @@ const assistantOutputSchema={
   },required:["reply","profile_updates","selected_skus","navigation"]
 };
 
+function recommendFromCatalogue(input,userMessage,eligible){
+  const text=[userMessage,input.business?.need,input.business?.type,input.business?.segment].filter(Boolean).join(" ").toLowerCase();
+  const signals=[
+    {words:["internet","wifi","wi-fi","broadband","connectivity","इंटरनेट","वाईफाई"],match:["fibre","airfiber","connectivity"]},
+    {words:["backup","downtime","reliable","failover","outage","बैकअप"],match:["failover","backup","leased line"]},
+    {words:["whatsapp","marketing","promotion","lead","व्हाट्सएप"],match:["whatsapp","sms"]},
+    {words:["email","office","meeting","ईमेल"],match:["email","office"]},
+    {words:["website","domain","वेबसाइट"],match:["website","domain"]},
+    {words:["billing","pos","inventory","बिलिंग"],match:["billing","pos","inventory"]},
+    {words:["security","firewall","virus","सुरक्षा"],match:["security","firewall","antivirus"]},
+    {words:["cctv","camera","कैमरा"],match:["cctv","camera"]},
+    {words:["machine","factory","energy","मशीन"],match:["machine","iot","monitoring"]},
+    {words:["fleet","vehicle","truck","gps","वाहन"],match:["fleet","tracker","gps"]},
+    {words:["call","phone","ivr","कॉल","फोन"],match:["telephony","sip","toll-free"]}
+  ];
+  const ranked=eligible.map(item=>{
+    const hay=[item.name,item.category,item.description].join(" ").toLowerCase();
+    let score=0;
+    for(const signal of signals)if(signal.words.some(word=>text.includes(word))&&signal.match.some(word=>hay.includes(word)))score+=4;
+    if(input.business?.sites&&item.minSites>input.business.sites)score-=5;
+    if(input.business?.employees&&item.minEmployees>input.business.employees)score-=2;
+    return {...item,score};
+  }).filter(item=>item.score>0).sort((a,b)=>b.score-a.score||a.monthlyMax-b.monthlyMax).slice(0,3);
+  const updates={name:null,type:null,city:null,employees:null,sites:null,budget:null,need:null};
+  if(!ranked.length)return {reply:"Absolutely. Tell me your business type, the services or problems you need help with, employee and location count, and monthly budget. I will compare eligible Airtel Business catalogue options and recommend a suitable combination with estimated costs.",profile_updates:updates,selected_skus:[],navigation:"none"};
+  const rows=ranked.map((item,index)=>(index+1)+". **"+item.name+" ("+item.sku+")** — ₹"+item.monthlyMin+"–₹"+item.monthlyMax+"/month.");
+  return {reply:"Based on the requirements shared, these eligible catalogue services are the closest fit:\n\n"+rows.join("\n")+"\n\nThese are indicative catalogue estimates, not a live quotation. Share your business location, number of employees/sites and budget to refine the recommendation.",profile_updates:updates,selected_skus:/recommend|suggest|service|product|bundle|सेवा|सुझाव/i.test(userMessage)?ranked.map(item=>item.sku):[],navigation:"none"};
+}
+
 // Translate interface copy with the configured Gemini API; no third-party browser translation widget.
 app.post("/api/assistant/translate",asyncRoute(async(req,res)=>{
   if(!process.env.GEMINI_API_KEY)return res.status(503).json({error:"Website translation is not configured. Add GEMINI_API_KEY in Vercel."});
@@ -141,44 +170,7 @@ app.post("/api/assistant/translate",asyncRoute(async(req,res)=>{
     body:JSON.stringify({contents:[{role:"user",parts:[{text:"Translate each UI string into "+language+". Return ONLY a JSON array of strings in exactly the same order and length. Preserve placeholders, numbers, product/SKU names, punctuation, HTML entities and meaning. Do not add explanations. Strings: "+JSON.stringify(input.texts)}]}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:5000,temperature:0.1}})
   });
   const payload=await upstream.json();
-  if(!upstream.ok){console.error("Gemini UI translation error",upstream.status,payload?.error?.message||"");return res.status(502).json({error:"Translation provider could not translate this page right now."})}
-  const raw=payload?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
-  let translations;try{translations=JSON.parse(raw)}catch{return res.status(502).json({error:"Translation provider returned an invalid response."})}
-  if(!Array.isArray(translations)||translations.length!==input.texts.length||translations.some(x=>typeof x!=="string"))return res.status(502).json({error:"Translation provider returned incomplete translations."});
-  res.json({translations});
-}));
-
-app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
-  if(!process.env.GROQ_API_KEY)return res.status(503).json({error:"The assistant is not configured yet. Please try again later."});
-  const input=validate(z.object({
-    message:z.string().trim().max(4000).default(""),
-    attachments:z.array(z.object({
-      name:z.string().min(1).max(180),
-      mimeType:z.enum(["application/pdf","image/jpeg","image/png"]),
-      extractedText:z.string().min(1).max(12000)
-    })).max(3).default([]),
-    history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).default([]),
-    business:z.record(z.string(),z.unknown()).nullable().optional(),
-    catalogue:z.array(z.object({sku:z.string(),name:z.string(),category:z.string(),description:z.string().optional(),monthlyMin:z.number(),monthlyMax:z.number(),setupFee:z.number(),eligible:z.boolean(),reason:z.string().optional()})).max(40).default([]),
-    editMode:z.boolean().default(false),language:z.enum(["auto","en","hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"]).default("auto")
-  }),req.body);
-  const eligible=input.catalogue.filter(item=>item.eligible);
-  if(!input.message && !input.attachments.length)return res.status(400).json({error:"Write a message or attach a file."});
-  const userMessage=input.message||"Please review the attached business materials and recommend relevant services from the available catalogue.";
-  let attachmentInsights="";
-  if(input.attachments.length){
-    const redactReferenceText=value=>String(value||"")
-      .replace(/\b[0-9]{2}\s?[A-Z]{5}\s?[0-9]{4}\s?[A-Z]\s?[1-9A-Z]\s?Z\s?[0-9A-Z]\b/gi,"[GSTIN REDACTED]")
-      .replace(/\bUDYAM[-\s]?[A-Z]{2}[-\s]?[0-9]{2}[-\s]?[0-9]{7}\b/gi,"[UDYAM NUMBER REDACTED]")
-      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,"[EMAIL REDACTED]")
-      .replace(/\b(?:\+?91[-\s]?)?[6-9]\d{9}\b/g,"[PHONE REDACTED]")
-      .replace(/\b\d{12}\b/g,"[IDENTIFIER REDACTED]")
-      .replace(/(?:address|registered office|residential address)\s*[:：].{0,180}/gi,"Address: [REDACTED]");
-    const totalText=input.attachments.reduce((sum,file)=>sum+file.extractedText.length,0);
-    if(totalText>30000)return res.status(413).json({error:"Please attach documents with no more than 30,000 characters of extracted text in total."});
-    attachmentInsights=input.attachments.map(file=>{
-      const text=redactReferenceText(file.extractedText).slice(0,10000);
-      return "File: "+file.name+"\nExtracted text (unverified reference material):\n"+text;
+  if(!upstream.ok){console.error("Groq assistant error",upstream.status,payload?.error?.code||"provider_error");const result=recommendFromCatalogue(input,userMessage,eligible);return res.json({result,provider:"catalogue-fallback",fallback:true})}\nExtracted text (unverified reference material):\n"+text;
     }).join("\n\n").slice(0,18000);
   }
   const system=[
@@ -222,12 +214,12 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
     });
   }catch(error){
     console.error("Groq assistant request failed",error.name||"network_error");
-    return res.status(error.name==="TimeoutError"||error.name==="AbortError"?504:502).json({error:"I couldn't reach the assistant just now. Please try again."});
+    const result=recommendFromCatalogue(input,userMessage,eligible);return res.json({result,provider:"catalogue-fallback",fallback:true});
   }
   let payload;try{payload=await upstream.json()}catch{return res.status(502).json({error:"The assistant returned an unreadable response. Please try again."})}
   if(!upstream.ok){console.error("Groq assistant error",upstream.status,payload?.error?.code||"provider_error");return res.status(502).json({error:"I couldn't prepare an answer just now. Please try again."})}
   const raw=payload?.choices?.[0]?.message?.content;
-  let result;try{result=JSON.parse(raw)}catch{return res.status(502).json({error:"I couldn't prepare a clear answer. Please try again."})}
+  let result;try{result=JSON.parse(raw)}catch{const fallback=recommendFromCatalogue(input,userMessage,eligible);return res.json({result:fallback,provider:"catalogue-fallback",fallback:true})}
   const fields=["name","type","city","employees","sites","budget","need"];
   if(!result||typeof result.reply!=="string"||!result.reply.trim()||!result.profile_updates||!Array.isArray(result.selected_skus)||!["none","quote","kyc","tracker","growth","advisor"].includes(result.navigation)){
     return res.status(502).json({error:"I couldn't prepare a clear answer. Please try again."});
