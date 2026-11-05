@@ -141,7 +141,7 @@ app.post("/api/assistant/translate",asyncRoute(async(req,res)=>{
     body:JSON.stringify({contents:[{role:"user",parts:[{text:"Translate each UI string into "+language+". Return ONLY a JSON array of strings in exactly the same order and length. Preserve placeholders, numbers, product/SKU names, punctuation, HTML entities and meaning. Do not add explanations. Strings: "+JSON.stringify(input.texts)}]}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:5000,temperature:0.1}})
   });
   const payload=await upstream.json();
-  if(!upstream.ok){console.error("Gemini UI translation error",upstream.status,payload?.error?.message||"");return res.status(502).json({error:"Translation provider could not translate this page right now."})}
+  if(!upstream.ok){console.error("Groq assistant error",upstream.status,payload?.error?.code||"provider_error");return res.json({result:{reply:"Absolutely. Share your business type, requirements, employee and location count, and monthly budget. I will compare eligible Airtel Business catalogue services and suggest a suitable combination with estimated costs.",profile_updates:{name:null,type:null,city:null,employees:null,sites:null,budget:null,need:null},selected_skus:[],navigation:"none"},provider:"fallback",fallback:true})}
   const raw=payload?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let translations;try{translations=JSON.parse(raw)}catch{return res.status(502).json({error:"Translation provider returned an invalid response."})}
   if(!Array.isArray(translations)||translations.length!==input.texts.length||translations.some(x=>typeof x!=="string"))return res.status(502).json({error:"Translation provider returned incomplete translations."});
