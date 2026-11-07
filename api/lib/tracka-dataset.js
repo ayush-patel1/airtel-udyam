@@ -85,6 +85,24 @@ export function scoreTrackALead(l){
   const nextAction=stage==="Quote accepted"?"Call to unblock KYC and confirm documents":stage==="KYC complete"?"Coordinate installation and activation":stage==="Needs assessed"?"Prepare a catalogue-backed bundle and quote":/price|quote|expensive|complex/i.test(l.drop_reason||"")?"Offer a simpler bundle and explain itemised pricing":/document|kyc|gst|udyam|paperwork|signatory|match/i.test(l.drop_reason||"")?"Offer guided KYC and document correction":/unreachable|wrong|invalid/i.test(l.drop_reason||"")?"Validate contact details before retrying":"Reconfirm business need and preferred callback time";
   return {score,priority:score>=65?"HIGH":score>=40?"MEDIUM":"LOW",reasons,nextAction};
 }
+export function buildTrackAEstimate(business,requestedItems,products){
+  const invalid=(message,status=409)=>Object.assign(new Error(message),{status});
+  if(!business?.cityTier||!business?.segment)throw invalid("Complete the business location and segment before preparing an estimate",400);
+  const ids=requestedItems.map(x=>x.sku);if(new Set(ids).size!==ids.length)throw invalid("Each catalogue service can appear only once; update its quantity instead",400);
+  const selected=new Set(ids),items=[];
+  for(const requested of requestedItems){
+    const p=products.find(x=>x.product_id===requested.sku);if(!p)throw invalid("Unknown catalogue service: "+requested.sku,400);
+    const tiers=String(p.available_city_tiers||"").split(";"),segments=String(p.target_segments||"").split(";"),deps=String(p.requires_one_of||"").split("|").filter(Boolean);
+    if(!tiers.includes(String(business.cityTier)))throw invalid(p.product_name+" is not eligible for the selected city tier");
+    if(!segments.includes(String(business.segment)))throw invalid(p.product_name+" is not eligible for the selected business segment");
+    if(Number(business.employees||0)<Number(p.min_employees||0))throw invalid(p.product_name+" requires at least "+p.min_employees+" employees");
+    if(Number(business.sites||1)<Number(p.min_sites||1))throw invalid(p.product_name+" requires at least "+p.min_sites+" business sites");
+    if(String(p.requires_gstin).toUpperCase()==="Y"&&!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(String(business.gstin||"")))throw invalid(p.product_name+" requires a GSTIN to be provided for subsequent verification");
+    if(deps.length&&!deps.some(x=>selected.has(x)))throw invalid(p.product_name+" requires a compatible base connectivity service");
+    items.push({sku:p.product_id,name:p.product_name,category:p.category,unit:p.unit,quantity:requested.quantity,monthlyMin:Number(p.price_min_inr_per_month),monthlyMax:Number(p.price_max_inr_per_month),setupFee:Number(p.one_time_setup_inr),contractMonths:Number(p.min_contract_months)});
+  }
+  return {items,monthlyMin:items.reduce((sum,x)=>sum+x.monthlyMin*x.quantity,0),monthlyMax:items.reduce((sum,x)=>sum+x.monthlyMax*x.quantity,0),setupTotal:items.reduce((sum,x)=>sum+x.setupFee*x.quantity,0),contractMonths:Math.max(...items.map(x=>x.contractMonths)),ruleVersion:"track-a-2026-07-15-v1",pricingSource:"TRACKA_IMPORTED_CATALOGUE",status:"DRAFT_ESTIMATE"};
+}
 const clean=(s)=>String(s||"").replace(/[^a-z0-9]/gi,"").toUpperCase();
 const gstRegex=/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i;
 export function lookupGstin(registry,gstin){
