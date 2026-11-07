@@ -490,21 +490,23 @@ app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OP
 
 
 function scoreLead(business,quotes,documents,orders){
- const reasons=[];let score=22;const latestQuote=quotes[0],latestOrder=orders[0],pendingDocs=documents.filter(d=>d.reviewStatus!=="VERIFIED");
- if(latestQuote&&!latestOrder){score+=24;reasons.push("Quote exists but no order has started")}else if(!latestQuote){score+=10;reasons.push("No quote created yet")}
- if(latestOrder&&["DRAFT","QUOTED","KYC_PENDING","UNDER_REVIEW","REJECTED"].includes(latestOrder.status)){score+=18;reasons.push("Order journey needs follow-up")}
- if(pendingDocs.length){score+=12;reasons.push("Verification documents need attention")}
- if(!business.lastContactAt){score+=12;reasons.push("No staff contact is recorded")}
- if(business.followUpAt&&new Date(business.followUpAt).getTime()<=Date.now()){score+=14;reasons.push("Follow-up is due or overdue")}
+ const reasons=[],factors=[];let score=22;
+ const add=(points,label)=>{score+=points;reasons.push(label);factors.push({points,label})};
+ const latestQuote=quotes[0],latestOrder=orders[0],pendingDocs=documents.filter(d=>d.reviewStatus!=="VERIFIED");
+ if(latestQuote&&!latestOrder)add(24,"Quote exists but no order has started");else if(!latestQuote)add(10,"No quote created yet");
+ if(latestOrder&&["DRAFT","QUOTED","KYC_PENDING","UNDER_REVIEW","REJECTED"].includes(latestOrder.status))add(18,"Order journey needs follow-up");
+ if(pendingDocs.length)add(12,"Verification documents need attention");
+ if(!business.lastContactAt)add(12,"No staff contact is recorded");
+ if(business.followUpAt&&new Date(business.followUpAt).getTime()<=Date.now())add(14,"Follow-up is due or overdue");
  const completeness=["name","city","segment","phoneToken"].filter(k=>Boolean(business[k])).length;
- if(completeness>=4){score+=8;reasons.push("Contact and business profile are complete")}
- if(business.segment==="prof"){score+=5;reasons.push("Professional-office pilot segment")}
+ if(completeness>=4)add(8,"Contact and business profile are complete");
+ if(business.segment==="prof")add(5,"Professional-office pilot segment");
  const ageDays=(Date.now()-new Date(business.updatedAt||business.createdAt||Date.now()).getTime())/86400000;
- if(ageDays>=7){score+=8;reasons.push("Lead has been inactive for 7+ days")}
- if(business.advisorOutcome==="NEEDS_INFO"){score+=5;reasons.push("Advisor needs more information")}
+ if(ageDays>=7)add(8,"Lead has been inactive for 7+ days");
+ if(business.advisorOutcome==="NEEDS_INFO")add(5,"Advisor needs more information");
  score=Math.max(0,Math.min(100,score));
  const nextAction=latestOrder?.status==="KYC_PENDING"?"Call to resolve KYC blockers":latestQuote&&!latestOrder?"Call to review the quote":!latestQuote?"Call to understand needs and build a bundle":"Call to confirm the next onboarding step";
- return {score,priority:score>=70?"HIGH":score>=45?"MEDIUM":"LOW",reasons,nextAction};
+ return {score,priority:score>=70?"HIGH":score>=45?"MEDIUM":"LOW",reasons,factors,baseScore:22,nextAction};
 }
 app.get("/api/staff/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
  const [businesses,quotes,documents,orders,consents]=await Promise.all([prisma.business.findMany({orderBy:{updatedAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}}),prisma.consent.findMany({orderBy:{createdAt:"desc"}})]);
