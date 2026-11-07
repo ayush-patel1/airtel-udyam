@@ -1027,7 +1027,7 @@ async function importTrackADataset(){
     const path=docEntries[i],entry=zip.file(path),blob=await entry.async("blob"),fileName=path.split("/").pop(),match=fileName.match(/^(K\d{2})_(.+)\.png$/i);
     setTrackAProgress("OCR specimen "+(i+1)+"/47 · "+fileName+" …");
     const result=await worker.recognize(blob);
-    kycDocuments.push({applicant_id:match[1],fileName,file_name:fileName,document_type:match[2],imageBase64:await blobToBase64(blob),ocrText:String(result.data.text||"").replace(/\s+/g," ").trim().slice(0,12000),ocrConfidence:Number(result.data.confidence||0)});
+    kycDocuments.push({applicant_id:match[1],fileName,file_name:fileName,document_type:match[2],imageBase64:await blobToBase64(blob),ocr_text:String(result.data.text||"").replace(/\s+/g," ").trim().slice(0,12000),ocrConfidence:Number(result.data.confidence||0)});
    }
   }finally{await worker.terminate()}
   setTrackAProgress("Compressing and securely importing 5,000 leads, registries and KYC specimens…");
