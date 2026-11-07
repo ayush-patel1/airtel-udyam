@@ -441,18 +441,22 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
       const eventKey="wa-in-"+msg.id;
       const encryptedEvent=encryptSensitive(JSON.stringify(msg),"whatsapp-inbound:"+msg.id);
       const encryptedBody=encryptSensitive(msg.text?.body||"","whatsapp-body:"+msg.id);
+      const phoneToken=tokenizeSensitive(String(msg.from||""),"business-phone");
+      const matchedBusiness=phoneToken?await prisma.business.findFirst({where:{phoneToken}}):null;
       await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message",payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token},update:{}});
       await prisma.message.upsert({where:{providerId:msg.id},create:{
-        channel:"WHATSAPP",direction:"INBOUND",providerId:msg.id,
+        businessId:matchedBusiness?.id||null,channel:"WHATSAPP",direction:"INBOUND",providerId:msg.id,
         fromAddress:mask(msg.from),toAddress:mask(value.metadata?.display_phone_number||""),
         body:null,bodyCiphertext:encryptedBody.ciphertext,bodyToken:encryptedBody.token,
-        payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token
-      },update:{}});
+        payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token,status:"RECEIVED"
+      },update:{businessId:matchedBusiness?.id||undefined}});
     }
     for(const status of value.statuses||[]) {
       const eventKey="wa-status-"+status.id+"-"+status.status;
       const encryptedStatus=encryptSensitive(JSON.stringify(status),"whatsapp-status:"+eventKey);
       await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message_status",payloadCiphertext:encryptedStatus.ciphertext,payloadToken:encryptedStatus.token},update:{}});
+      const deliveryStatus=String(status.status||"").toUpperCase();
+      if(["SENT","DELIVERED","READ","FAILED"].includes(deliveryStatus))await prisma.message.updateMany({where:{providerId:status.id},data:{status:deliveryStatus}});
     }
   }
   res.sendStatus(200);
@@ -511,12 +515,24 @@ function scoreLead(business,quotes,documents,orders){
 app.get("/api/staff/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
  const [businesses,quotes,documents,orders,consents]=await Promise.all([prisma.business.findMany({orderBy:{updatedAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}}),prisma.consent.findMany({orderBy:{createdAt:"desc"}})]);
  const rows=businesses.filter(b=>!["WON","LOST","CLOSED_WON","CLOSED_LOST"].includes(b.advisorOutcome||"OPEN")).map(b=>{
-  const bQuotes=quotes.filter(q=>q.businessId===b.id),bDocs=documents.filter(d=>d.businessId===b.id),bOrders=orders.filter(o=>o.businessId===b.id),bConsents=consents.filter(c=>c.businessId===b.id&&c.channel==="WHATSAPP"),score=scoreLead(b,bQuotes,bDocs,bOrders);
-  return {...businessStaffView(b),leadStatus:b.leadStatus||"OPEN",advisorOutcome:b.advisorOutcome||"OPEN",lastContactAt:b.lastContactAt||null,followUpAt:b.followUpAt||null,salesNotes:b.salesNotes||"",source:b.source||"STAFF_CREATED",latestQuote:bQuotes[0]?{id:bQuotes[0].id,quoteNumber:bQuotes[0].quoteNumber,status:bQuotes[0].status,monthlyMin:bQuotes[0].monthlyMin,monthlyMax:bQuotes[0].monthlyMax,createdAt:bQuotes[0].createdAt}:null,latestOrder:bOrders[0]?{id:bOrders[0].id,status:bOrders[0].status,updatedAt:bOrders[0].updatedAt}:null,pendingDocuments:bDocs.filter(d=>d.reviewStatus!=="VERIFIED").length,whatsappConsent:bConsents.length?!!bConsents[0].granted:false,...score};
+  const bQuotes=quotes.filter(q=>q.businessId===b.id),bDocs=documents.filter(d=>d.businessId===b.id),bOrders=orders.filter(o=>o.businessId===b.id),bConsents=consents.filter(c=>c.businessId===b.id),waConsent=bConsents.find(c=>c.channel==="WHATSAPP"),callbackConsent=bConsents.find(c=>c.channel==="WEB"),score=scoreLead(b,bQuotes,bDocs,bOrders);
+  return {...businessStaffView(b),leadStatus:b.leadStatus||"OPEN",advisorOutcome:b.advisorOutcome||"OPEN",lastContactAt:b.lastContactAt||null,followUpAt:b.followUpAt||null,salesNotes:b.salesNotes||"",source:b.source||"STAFF_CREATED",callbackConsent:!!callbackConsent?.granted,callbackConsentAt:callbackConsent?.createdAt||null,whatsappConsent:!!waConsent?.granted,whatsappConsentAt:waConsent?.createdAt||null,whatsappConsentVersion:waConsent?.version||null,preferredLang:b.preferredLang||"en",businessType:b.type||null,employees:b.employees||null,sites:b.sites||null,need:b.need||null,latestQuote:bQuotes[0]?{id:bQuotes[0].id,quoteNumber:bQuotes[0].quoteNumber,status:bQuotes[0].status,monthlyMin:bQuotes[0].monthlyMin,monthlyMax:bQuotes[0].monthlyMax,createdAt:bQuotes[0].createdAt}:null,latestOrder:bOrders[0]?{id:bOrders[0].id,status:bOrders[0].status,updatedAt:bOrders[0].updatedAt}:null,pendingDocuments:bDocs.filter(d=>d.reviewStatus!=="VERIFIED").length,whatsappConsent:bConsents.length?!!bConsents[0].granted:false,...score};
  });
  rows.sort((a,b)=>b.score-a.score||new Date(a.followUpAt||a.updatedAt||0)-new Date(b.followUpAt||b.updatedAt||0));
  await audit(req,"LEAD_QUEUE_VIEWED","Business",null,{count:rows.length});
  res.set("Cache-Control","no-store");res.json({leads:rows,summary:{total:rows.length,high:rows.filter(x=>x.priority==="HIGH").length,medium:rows.filter(x=>x.priority==="MEDIUM").length,low:rows.filter(x=>x.priority==="LOW").length},scoreNote:"Priority score is a transparent rule-based call queue aid, not a validated conversion probability."});
+}));
+app.get("/api/staff/integrations/whatsapp/status",auth,allow("ADMIN","SALES","OPERATIONS"),(req,res)=>{
+ const configured=!!(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID);
+ const webhookConfigured=!!(process.env.WHATSAPP_VERIFY_TOKEN&&process.env.WHATSAPP_APP_SECRET);
+ res.set("Cache-Control","no-store");
+ res.json({provider:"Meta WhatsApp Cloud API",configured,webhookConfigured,apiVersion:process.env.WHATSAPP_API_VERSION||"v23.0",sendMode:configured?"Live provider sending enabled":"Preview only · credentials missing",webhookMode:webhookConfigured?"Signed delivery and inbound webhooks enabled":"Webhook verification not configured",requiredEnvironment:["WHATSAPP_TOKEN","WHATSAPP_PHONE_NUMBER_ID","WHATSAPP_VERIFY_TOKEN","WHATSAPP_APP_SECRET"]});
+});
+app.get("/api/staff/leads/:id/messages",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
+ const business=await prisma.business.findUnique({where:{id:req.params.id}});if(!business)return res.status(404).json({error:"Lead not found"});
+ const rows=await prisma.message.findMany({where:{businessId:business.id,channel:"WHATSAPP"},orderBy:{createdAt:"desc"},take:30});
+ const messages=rows.map(m=>({id:m.id,direction:m.direction,status:m.status,createdAt:m.createdAt,body:decryptSensitive(m.bodyCiphertext)||m.body||"",toAddress:m.toAddress,fromAddress:m.fromAddress,providerId:m.providerId}));
+ res.set("Cache-Control","no-store");res.json({messages});
 }));
 app.patch("/api/staff/leads/:id",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
  const input=validate(z.object({advisorOutcome:z.enum(["OPEN","CONTACTED","NEEDS_INFO","QUOTE_SHARED","NOT_INTERESTED","WON","LOST"]),salesNotes:z.string().max(1200).optional(),followUpAt:z.union([z.string().datetime(),z.literal("")]).optional(),contacted:z.boolean().default(false)}),req.body);
