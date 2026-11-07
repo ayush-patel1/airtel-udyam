@@ -555,7 +555,7 @@ app.get("/api/admin/dataset/status",auth,allow("ADMIN","SALES","OPERATIONS","REV
 }));
 app.get("/api/catalogue",asyncRoute(async(req,res)=>{
   let snap;try{snap=await trackARef().child("catalogue").get();}catch{snap=null;}
-  if(snap.exists()){res.set("Cache-Control","public, max-age=300");return res.json({products:Object.values(snap.val()),source:"TRACKA_SYNTHETIC_CATALOGUE",version:"track-a-2026-07-15-v1"});}
+  if(snap?.exists()){res.set("Cache-Control","public, max-age=300");return res.json({products:Object.values(snap.val()),source:"TRACKA_SYNTHETIC_CATALOGUE",version:"track-a-2026-07-15-v1"});}
   res.json({products:[...CATALOGUE.values()],source:"BUILT_IN_CASE_CATALOGUE",version:CATALOGUE_VERSION});
 }));
 app.get("/api/mock/gstin/:gstin",asyncRoute(async(req,res)=>{
