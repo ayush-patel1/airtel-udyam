@@ -37,6 +37,14 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - Order approval is blocked unless at least one verification document exists and every submitted document has been marked `VERIFIED`. This is a workflow guard, not a government authenticity check.
 - The static customer experience currently saves its profile, estimate and Smart KYC checks in the browser. The staff APIs are an integration foundation and are not connected to a live Airtel reviewer queue in the deployed environment until Firebase, AWS and authorised staff accounts are provisioned.
 
+## Advisor callback and sales lead desk
+
+- `POST /api/leads/intake` is the public callback hand-off. It validates an explicit web callback consent, applies a basic per-IP request limit, encrypts phone/email before storage, and records the consent evidence. WhatsApp consent is separate and optional.
+- `GET /api/staff/leads` is restricted to `ADMIN`, `SALES` and `OPERATIONS`. It returns open leads with contact details visible only to authenticated staff, latest quote/order context, pending-document count and a 0–100 call-priority score.
+- `PATCH /api/staff/leads/:id` records advisor outcome, notes, follow-up time and contact timestamp. Changes are audit logged; `WON` and `LOST` leads leave the active queue.
+- The call-priority score is deterministic and explainable. It ranks follow-up work; it is not a calibrated propensity probability and must not be used for credit, eligibility, pricing or KYC decisions.
+- The staff desk requires a provisioned staff account. Configure Firebase, encryption and tokenization secrets before accepting callback requests.
+
 ## WhatsApp workflow
 
 - Inbound WhatsApp webhooks require a valid `X-Hub-Signature-256` HMAC-SHA256 signature using `WHATSAPP_APP_SECRET` before events are persisted idempotently in `IntegrationEvent` and `Message`.
