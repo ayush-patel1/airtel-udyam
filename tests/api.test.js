@@ -38,6 +38,19 @@ test("admin audit endpoint is protected by authentication", async () => {
   assert.equal(response.status, 401);
 });
 
+test("sales lead desk requires an authorised staff session", async () => {
+  const response = await fetch(baseUrl + "/api/staff/leads");
+  assert.equal(response.status, 401);
+});
+
+test("callback intake requires explicit contact consent", async () => {
+  const response = await fetch(baseUrl + "/api/leads/intake", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Test Business", phone: "+919876543210", city: "Raipur", consent: false })
+  });
+  assert.equal(response.status, 400);
+});
+
 test("WhatsApp webhook fails closed when signature secret is not configured", async () => {
   const previous = process.env.WHATSAPP_APP_SECRET;
   delete process.env.WHATSAPP_APP_SECRET;
@@ -103,7 +116,7 @@ test("customer-facing inline JavaScript parses without syntax errors", async () 
     cursor = end + "</script>".length;
   }
   assert.ok(scripts.length > 0, "expected at least one inline application script");
-  for (const script of scripts) new Function(script[1]);
+  for (const script of scripts) new Function(script);
 });
 
 test("sensitive values are AES-GCM encrypted and deterministically tokenized", () => {
