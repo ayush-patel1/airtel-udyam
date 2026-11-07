@@ -1093,7 +1093,7 @@ function scheduleRegistryLookup(kind){
  const value=input.value.trim().toUpperCase();input.value=value;
  registryLookupRequests[kind]++;const requestId=registryLookupRequests[kind];
  box.classList.add('hidden');box.textContent='';if(!value)return;
- const valid=kind==='gstin'?/^\\d{2}[A-Z0-9]{13}$/.test(value):/^UDYAM-[A-Z]{2}-\\d{2}-\\d{7}$/.test(value);
+ const valid=kind==='gstin'?/^\d{2}[A-Z0-9]{13}$/.test(value):/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/.test(value);
  if(!valid){if(value.length >= (kind==='gstin'?15:19)){box.classList.remove('hidden');box.textContent=kind==='gstin'?'Enter a valid 15-character GSTIN format.':'Enter a valid Udyam number format.';}return;}
  box.classList.remove('hidden');box.textContent='Checking synthetic registry…';
  registryLookupTimers[kind]=setTimeout(()=>runRegistryLookup(kind,value,requestId),550);
