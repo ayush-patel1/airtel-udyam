@@ -535,20 +535,22 @@ app.post("/api/admin/dataset/import",auth,allow("ADMIN"),asyncRoute(async(req,re
   const products=parseCsv(files["product_catalogue.csv"]),leads=parseCsv(files["smb_leads.csv"]),gstin=parseCsv(files["mock_gstin_registry.csv"]),udyam=parseCsv(files["mock_udyam_registry.csv"]);
   const docs=Array.isArray(pack.kycDocuments)?pack.kycDocuments:[];
   if(products.length!==25||leads.length!==5000||gstin.length!==3534||udyam.length!==2723||docs.length!==47)return res.status(422).json({error:"Dataset row counts do not match the supplied Track A pack.",received:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},expected:{products:25,leads:5000,gstin:3534,udyam:2723,kycDocuments:47}});
-  if(docs.some(d=>!/^K\d{2}_[a-z_]+\.png$/i.test(d.fileName||"")||typeof d.imageBase64!=="string"||typeof d.ocrText!=="string"))return res.status(400).json({error:"One or more KYC specimen files are incomplete."});
+  if(docs.some(d=>!/^K\d{2}_[a-z_]+\.png$/i.test(d.fileName||d.file_name||"")||typeof d.imageBase64!=="string"||typeof (d.ocr_text??d.ocrText)!=="string"))return res.status(400).json({error:"One or more KYC specimen files are incomplete."});
+  const normalizedDocs=docs.map(d=>({...d,file_name:d.file_name||d.fileName,ocr_text:d.ocr_text??d.ocrText}));
   if(docs.reduce((sum,d)=>sum+String(d.imageBase64||"").length,0)>14*1024*1024)return res.status(413).json({error:"KYC specimen images exceed the import size limit."});
   const analytics=buildTrackAAnalytics(leads);
   const byId=(rows,key)=>Object.fromEntries(rows.map(row=>[row[key],row]));
   const db=trackARef();
+  const kycById=Object.fromEntries(normalizedDocs.map(d=>[String(d.file_name).replace(/\.png$/i,""),d]));
   await Promise.all([
-    db.child("manifest").set({version:"track-a-2026-07-15-v1",importedAt:new Date().toISOString(),importedBy:req.user.sub,synthetic:true,counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15"}),
     db.child("catalogue").set(byId(products,"product_id")),
     db.child("leads").set(byId(leads,"lead_id")),
     db.child("gstinRegistry").set(byId(gstin,"gstin")),
     db.child("udyamRegistry").set(byId(udyam,"udyam_number")),
-    db.child("kycDocuments").set(byId(docs,"fileName")),
+    db.child("kycDocuments").set(kycById),
     db.child("analytics").set(analytics)
   ]);
+  await db.child("manifest").set({version:"track-a-2026-07-15-v1",importedAt:new Date().toISOString(),importedBy:req.user.sub,synthetic:true,counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15"});
   await audit(req,"TRACKA_DATASET_IMPORTED","TrackADataset",null,{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length}});
   res.status(201).json({ok:true,manifest:{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15",synthetic:true},analytics});
 }));
