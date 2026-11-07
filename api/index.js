@@ -1,4 +1,7 @@
 import express from "express";
+import { gunzipSync } from "node:zlib";
+import { getFirebaseDatabase } from "./lib/firebase-store.js";
+import { parseCsv, buildTrackAAnalytics, scoreTrackALead, lookupGstin, lookupUdyam, analyseKycSamples, buildTrackAEstimate } from "./lib/tracka-dataset.js";
 import cors from "cors";
 import helmet from "helmet";
 import bcrypt from "bcryptjs";
@@ -21,6 +24,7 @@ app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: (process.env.CORS_ORIGINS || "").split(",").filter(Boolean), credentials: true }));
 app.use((req,res,next) => {
+  if (req.path === "/api/admin/dataset/import" && req.method === "POST") return express.raw({type:"application/gzip",limit:"20mb"})(req,res,next);
   if (req.path === "/api/webhooks/whatsapp" && req.method === "POST") {
     return express.raw({type:"application/json",limit:"1mb"})(req,res,next);
   }
@@ -308,7 +312,9 @@ app.post("/api/quotes",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(quoteSchema,req.body);
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
-  const estimate=buildEstimate({...business,gstin:decryptSensitive(business.gstinCiphertext)||business.gstin||null},input.items);
+  const quoteBusiness={...business,gstin:decryptSensitive(business.gstinCiphertext)||business.gstin||null};
+  let importedCatalogue=null;try{const snap=await trackARef().child("catalogue").get();if(snap.exists())importedCatalogue=Object.values(snap.val());}catch{}
+  const estimate=importedCatalogue?buildTrackAEstimate(quoteBusiness,input.items,importedCatalogue):buildEstimate(quoteBusiness,input.items);
   const {items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths}=estimate;
   const quote=await prisma.quote.create({data:{
     quoteNumber:"EST-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),
@@ -516,6 +522,78 @@ app.patch("/api/staff/leads/:id",auth,allow("ADMIN","SALES","OPERATIONS"),asyncR
  const updated=await prisma.business.update({where:{id:business.id},data:{advisorOutcome:input.advisorOutcome,leadStatus:["WON","LOST"].includes(input.advisorOutcome)?"CLOSED":input.advisorOutcome,salesNotes:input.salesNotes??business.salesNotes??"",followUpAt:input.followUpAt||null,...(input.contacted?{lastContactAt:new Date().toISOString()}: {})}});
  await audit(req,"LEAD_FOLLOWUP_UPDATED","Business",business.id,{advisorOutcome:input.advisorOutcome,contacted:input.contacted,followUpAt:input.followUpAt||null});
  res.json({lead:businessPublicView(updated),message:"Lead follow-up saved."});
+}));
+
+
+const trackARef=()=>getFirebaseDatabase().ref("trackA/dataset");
+app.post("/api/admin/dataset/import",auth,allow("ADMIN"),asyncRoute(async(req,res)=>{
+  if(!Buffer.isBuffer(req.body))return res.status(415).json({error:"Upload the dataset as a gzip-compressed application/gzip payload."});
+  let pack;try{pack=JSON.parse(gunzipSync(req.body,{maxOutputLength:45*1024*1024}).toString("utf8"));}catch{return res.status(400).json({error:"Dataset archive could not be decoded. Re-select the original ZIP and retry."});}
+  const files=pack?.files||{};
+  const required=["product_catalogue.csv","smb_leads.csv","mock_gstin_registry.csv","mock_udyam_registry.csv"];
+  for(const name of required)if(typeof files[name]!=="string")return res.status(400).json({error:"Dataset is missing "+name});
+  const products=parseCsv(files["product_catalogue.csv"]),leads=parseCsv(files["smb_leads.csv"]),gstin=parseCsv(files["mock_gstin_registry.csv"]),udyam=parseCsv(files["mock_udyam_registry.csv"]);
+  const docs=Array.isArray(pack.kycDocuments)?pack.kycDocuments:[];
+  if(products.length!==25||leads.length!==5000||gstin.length!==3534||udyam.length!==2723||docs.length!==47)return res.status(422).json({error:"Dataset row counts do not match the supplied Track A pack.",received:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},expected:{products:25,leads:5000,gstin:3534,udyam:2723,kycDocuments:47}});
+  if(docs.some(d=>!/^K\d{2}_[a-z_]+\.png$/i.test(d.fileName||"")||typeof d.imageBase64!=="string"||typeof d.ocrText!=="string"))return res.status(400).json({error:"One or more KYC specimen files are incomplete."});
+  if(docs.reduce((sum,d)=>sum+String(d.imageBase64||"").length,0)>14*1024*1024)return res.status(413).json({error:"KYC specimen images exceed the import size limit."});
+  const analytics=buildTrackAAnalytics(leads);
+  const byId=(rows,key)=>Object.fromEntries(rows.map(row=>[row[key],row]));
+  const db=trackARef();
+  await Promise.all([
+    db.child("manifest").set({version:"track-a-2026-07-15-v1",importedAt:new Date().toISOString(),importedBy:req.user.sub,synthetic:true,counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15"}),
+    db.child("catalogue").set(byId(products,"product_id")),
+    db.child("leads").set(byId(leads,"lead_id")),
+    db.child("gstinRegistry").set(byId(gstin,"gstin")),
+    db.child("udyamRegistry").set(byId(udyam,"udyam_number")),
+    db.child("kycDocuments").set(byId(docs,"fileName")),
+    db.child("analytics").set(analytics)
+  ]);
+  await audit(req,"TRACKA_DATASET_IMPORTED","TrackADataset",null,{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length}});
+  res.status(201).json({ok:true,manifest:{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15",synthetic:true},analytics});
+}));
+app.get("/api/admin/dataset/status",auth,allow("ADMIN","SALES","OPERATIONS","REVIEWER"),asyncRoute(async(req,res)=>{
+  const snap=await trackARef().child("manifest").get();res.set("Cache-Control","no-store");res.json({imported:snap.exists(),manifest:snap.val()||null});
+}));
+app.get("/api/catalogue",asyncRoute(async(req,res)=>{
+  let snap;try{snap=await trackARef().child("catalogue").get();}catch{snap=null;}
+  if(snap?.exists()){res.set("Cache-Control","public, max-age=300");return res.json({products:Object.values(snap.val()),source:"TRACKA_SYNTHETIC_CATALOGUE",version:"track-a-2026-07-15-v1"});}
+  res.json({products:[...CATALOGUE.values()],source:"BUILT_IN_CASE_CATALOGUE",version:CATALOGUE_VERSION});
+}));
+app.get("/api/mock/gstin/:gstin",asyncRoute(async(req,res)=>{
+  const raw=String(req.params.gstin||"").toUpperCase();if(!/^\d{2}[A-Z0-9]{13}$/i.test(raw))return res.status(400).json({error:"Enter a 15-character GSTIN."});
+  let snap;try{snap=await trackARef().child("gstinRegistry").child(raw).get();}catch{return res.status(503).json({error:"Synthetic registry is not imported yet."});}
+  if(!snap.exists())return res.json({found:false,status:"NOT_FOUND",registry:"SYNTHETIC",message:"No match in the mock registry."});
+  res.set("Cache-Control","no-store");res.json(lookupGstin([snap.val()],raw));
+}));
+app.get("/api/mock/udyam/:number",asyncRoute(async(req,res)=>{
+  const raw=String(req.params.number||"").toUpperCase();if(!/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/i.test(raw))return res.status(400).json({error:"Enter a valid Udyam registration number."});
+  let snap;try{snap=await trackARef().child("udyamRegistry").child(raw).get();}catch{return res.status(503).json({error:"Synthetic registry is not imported yet."});}
+  if(!snap.exists())return res.json({found:false,status:"NOT_FOUND",registry:"SYNTHETIC",message:"No match in the mock registry."});
+  res.set("Cache-Control","no-store");res.json(lookupUdyam([snap.val()],raw));
+}));
+app.get("/api/staff/dataset/analytics",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
+  const snap=await trackARef().child("analytics").get();if(!snap.exists())return res.status(404).json({error:"Import the Track A dataset first."});
+  res.set("Cache-Control","no-store");res.json({analytics:snap.val(),source:"5,000 synthetic SMB leads",disclaimer:"Case-study dataset only; not live Airtel customer performance."});
+}));
+app.get("/api/staff/dataset/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
+  const snap=await trackARef().child("leads").get();if(!snap.exists())return res.status(404).json({error:"Import the Track A dataset first."});
+  const all=Object.values(snap.val()||{}),q=String(req.query.q||"").toLowerCase().slice(0,100),stage=String(req.query.stage||"ALL"),segment=String(req.query.segment||"ALL"),source=String(req.query.source||"ALL"),priority=String(req.query.priority||"ALL");
+  const filtered=all.map(l=>({...l,...scoreTrackALead(l)})).filter(l=>(stage==="ALL"||l.stage_reached===stage)&&(segment==="ALL"||l.segment===segment)&&(source==="ALL"||l.lead_source===source)&&(priority==="ALL"||l.priority===priority)&&(!q||[l.lead_id,l.business_name,l.city,l.state,l.drop_reason,l.lead_source].some(v=>String(v||"").toLowerCase().includes(q))));
+  filtered.sort((a,b)=>b.score-a.score||String(a.created_date).localeCompare(String(b.created_date)));
+  const page=Math.max(1,Math.min(10000,Number(req.query.page)||1)),pageSize=Math.max(1,Math.min(100,Number(req.query.pageSize)||25)),items=filtered.slice((page-1)*pageSize,page*pageSize).map(l=>({...l,gstin:l.gstin?l.gstin.slice(0,2)+"••••••••"+l.gstin.slice(-3):"",udyam_number:l.udyam_number?l.udyam_number.slice(0,8)+"••••"+l.udyam_number.slice(-3):""}));
+  res.set("Cache-Control","no-store");res.json({leads:items,pagination:{page,pageSize,total:filtered.length,pages:Math.ceil(filtered.length/pageSize)},filters:{stage,segment,source,priority,q},disclaimer:"Synthetic lead data. Priority is an explainable call-queue aid, not a validated conversion probability."});
+}));
+app.get("/api/staff/dataset/kyc-samples",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
+  const snap=await trackARef().child("kycDocuments").get();if(!snap.exists())return res.status(404).json({error:"Import the Track A dataset first."});
+  const docs=Object.values(snap.val()||{}).map(({imageBase64,...d})=>d),groups=analyseKycSamples(docs);
+  res.set("Cache-Control","no-store");res.json({applicants:groups.map(({documents,...g})=>({...g,documents:documents.map(({ocrText,...d})=>d)})),documentCount:docs.length,disclaimer:"Synthetic specimen documents. OCR is advisory and every decision requires human review."});
+}));
+app.get("/api/staff/dataset/kyc-samples/:applicantId",auth,allow("ADMIN","REVIEWER"),asyncRoute(async(req,res)=>{
+  const snap=await trackARef().child("kycDocuments").get();if(!snap.exists())return res.status(404).json({error:"Import the Track A dataset first."});
+  const docs=Object.values(snap.val()||{}).filter(d=>d.applicant_id===req.params.applicantId);
+  if(!docs.length)return res.status(404).json({error:"Applicant sample not found."});
+  const groups=analyseKycSamples(docs);const redact=text=>String(text||"").replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/gi,"•••••••••••••••").replace(/UDYAM-[A-Z]{2}-\d{2}-\d{7}/gi,"UDYAM-••-••-•••••••").replace(/SYN-ID-\d+/gi,"SYN-ID-••••••").replace(/\b\d{10}\b/g,"••••••"+String(text||"").match(/\d{10}/)?.[0]?.slice(-4));res.set("Cache-Control","no-store");res.json({applicant:groups[0],documents:docs.map(d=>({...d,ocr_text:redact(d.ocr_text),imageDataUrl:"data:image/png;base64,"+d.imageBase64}))});
 }));
 
 // Integration status, reviewer queue and audit access
