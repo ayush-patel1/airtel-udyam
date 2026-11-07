@@ -1,7 +1,7 @@
 import express from "express";
 import { gunzipSync } from "node:zlib";
 import { getFirebaseDatabase } from "./lib/firebase-store.js";
-import { parseCsv, buildTrackAAnalytics, scoreTrackALead, lookupGstin, lookupUdyam, analyseKycSamples } from "./lib/tracka-dataset.js";
+import { parseCsv, buildTrackAAnalytics, scoreTrackALead, lookupGstin, lookupUdyam, analyseKycSamples, buildTrackAEstimate } from "./lib/tracka-dataset.js";
 import cors from "cors";
 import helmet from "helmet";
 import bcrypt from "bcryptjs";
@@ -312,7 +312,9 @@ app.post("/api/quotes",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const input=validate(quoteSchema,req.body);
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
-  const estimate=buildEstimate({...business,gstin:decryptSensitive(business.gstinCiphertext)||business.gstin||null},input.items);
+  const quoteBusiness={...business,gstin:decryptSensitive(business.gstinCiphertext)||business.gstin||null};
+  let importedCatalogue=null;try{const snap=await trackARef().child("catalogue").get();if(snap.exists())importedCatalogue=Object.values(snap.val());}catch{}
+  const estimate=importedCatalogue?buildTrackAEstimate(quoteBusiness,input.items,importedCatalogue):buildEstimate(quoteBusiness,input.items);
   const {items:pricedItems,monthlyMin,monthlyMax,setupTotal,contractMonths}=estimate;
   const quote=await prisma.quote.create({data:{
     quoteNumber:"EST-"+Date.now().toString(36).toUpperCase()+"-"+randomUUID().slice(0,5).toUpperCase(),
