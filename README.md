@@ -84,3 +84,19 @@ Recommended live walkthrough:
 6. Finish with the next-step guidance and Growth Cockpit, explaining which analytics are synthetic and which decisions are deterministic.
 
 The prototype is designed to demonstrate the customer experience and integration architecture. It is not a production Airtel onboarding channel until authorised Airtel systems, identity, serviceability, pricing, order management and fulfilment integrations are connected.
+
+
+## Track A synthetic dataset integration
+
+The supplied `YTL_TrackA_Udyam_Digital_Data.zip` is imported from the staff-only **Sales Lead Desk → Dataset Studio**. Sign in as an ADMIN, choose the ZIP, and start the import. The browser reads the four CSVs, OCRs the 47 PNG specimen documents locally, compresses the payload and sends it to the protected import endpoint. The import is a one-time operation and can be repeated to refresh the case pack.
+
+The import expects exactly 25 products, 5,000 leads, 3,534 mock GSTIN records, 2,723 mock Udyam records and 47 KYC images. Data is synthetic and dated 15 July 2026.
+
+After import:
+- The advisor catalogue is loaded from the supplied 25-product catalogue and quote pricing/eligibility remains server-side.
+- The Insights page computes the cumulative funnel, segment/channel conversion, drop reasons, CAC, activation time, six-month churn and NPS from the 5,000 leads.
+- The Sales Lead Desk exposes searchable, paginated historical leads and an explainable next-action priority score.
+- Smart KYC can look up the synthetic GSTIN/Udyam registries. Staff reviewers can inspect all 12 specimen applicants, source images, OCR text and validation flags.
+- Registry responses are explicitly labelled synthetic and are never represented as live GSTN/Udyam verification.
+
+The judges-only ZIP is intentionally not part of this student dataset workflow. Do not upload or expose judge-only scenarios, answer keys or regeneration scripts in the customer-facing app.
