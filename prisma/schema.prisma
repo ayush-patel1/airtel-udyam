@@ -59,6 +59,12 @@ model Business {
   udyamNumber    String?
   consentAt      DateTime?
   consentPurpose String?
+  source         String?
+  leadStatus     String?
+  advisorOutcome String?
+  lastContactAt  String?
+  followUpAt     String?
+  salesNotes     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   quotes         Quote[]
