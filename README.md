@@ -15,6 +15,14 @@ A customer-facing digital onboarding experience for Indian MSMEs, built for the 
 7. **Growth Cockpit** — compare budget-constrained bundles, model user-entered business-value assumptions and review synthetic funnel insights.
 8. **Udyam Assistant** — ask contextual questions, use guided prompts, switch supported languages, dictate messages and attach redacted business photos, floor plans, service brochures or bills for preliminary AI analysis.
 
+## Stretch-goal workflows
+
+- **Voice assistant:** the customer chat supports browser speech-to-text and spoken assistant replies in the selected/detected language. Microphone and speech availability depend on the user's browser/device permissions and installed voices.
+- **Advisor hand-off:** customers can submit a callback request from the Business Advisor with an explicit contact consent. Contact details are encrypted before Firebase persistence; optional WhatsApp consent is recorded separately.
+- **Sales lead desk:** ADMIN, SALES and OPERATIONS staff can review open callback leads, see the latest quote/order context, record outcomes, notes and follow-up dates, and prioritise calls.
+- **Call-priority score:** a transparent 0–100 rules-based queue score uses quote/order stage, pending KYC, contact recency, follow-up due date, profile completeness and pilot segment. It is a prioritisation aid, not a validated conversion probability or a basis for eligibility/pricing decisions.
+- **WhatsApp:** outbound messaging remains consent-gated and requires configured Meta credentials; session messages must follow Meta's 24-hour service window and approved-template rules.
+
 ## Assistant file analysis
 
 - Accepts up to 3 PDF, JPG or PNG files per message; PDFs up to 1 MB each, images are resized/compressed in the browser, and the combined prepared files are limited to 2.5 MB to fit serverless request limits.
