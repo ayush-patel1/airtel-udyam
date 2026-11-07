@@ -441,8 +441,8 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
       const eventKey="wa-in-"+msg.id;
       const encryptedEvent=encryptSensitive(JSON.stringify(msg),"whatsapp-inbound:"+msg.id);
       const encryptedBody=encryptSensitive(msg.text?.body||"","whatsapp-body:"+msg.id);
-      const phoneToken=tokenizeSensitive(String(msg.from||""),"business-phone");
-      const matchedBusiness=phoneToken?await prisma.business.findFirst({where:{phoneToken}}):null;
+      const sender=String(msg.from||"");
+      const matchedBusiness=await prisma.business.findFirst({where:{phoneToken:tokenizeSensitive(sender,"business-phone")}})||await prisma.business.findFirst({where:{phoneToken:tokenizeSensitive("+"+sender,"business-phone")}});
       await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message",payloadCiphertext:encryptedEvent.ciphertext,payloadToken:encryptedEvent.token},update:{}});
       await prisma.message.upsert({where:{providerId:msg.id},create:{
         businessId:matchedBusiness?.id||null,channel:"WHATSAPP",direction:"INBOUND",providerId:msg.id,
