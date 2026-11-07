@@ -38,6 +38,7 @@ const audit = (req, action, entityType, entityId, metadata={}) => prisma.auditEv
 });
 const mask = value => value ? String(value).replace(/^(.{3}).*(.{3})$/, "$1••••••$2") : null;
 const maskEmail = value => {if(!value)return null;const [local,domain]=String(value).split("@");return domain?(local.slice(0,1)+"•••@"+domain):mask(value)};
+const businessStaffView = business => ({...businessPublicView(business),phone:decryptSensitive(business.phoneCiphertext)||business.phone||null,email:decryptSensitive(business.emailCiphertext)||business.email||null});
 const businessPublicView = business => {
   const {phoneCiphertext,phoneToken,emailCiphertext,emailToken,gstinCiphertext,gstinToken,udyamCiphertext,udyamToken,...safe}=business;
   const phone=decryptSensitive(phoneCiphertext)||business.phone||null;
@@ -503,9 +504,10 @@ app.get("/api/staff/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(a
  const [businesses,quotes,documents,orders,consents]=await Promise.all([prisma.business.findMany({orderBy:{updatedAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}}),prisma.consent.findMany({orderBy:{createdAt:"desc"}})]);
  const rows=businesses.filter(b=>!["WON","LOST","CLOSED_WON","CLOSED_LOST"].includes(b.advisorOutcome||"OPEN")).map(b=>{
   const bQuotes=quotes.filter(q=>q.businessId===b.id),bDocs=documents.filter(d=>d.businessId===b.id),bOrders=orders.filter(o=>o.businessId===b.id),bConsents=consents.filter(c=>c.businessId===b.id&&c.channel==="WHATSAPP"),score=scoreLead(b,bQuotes,bDocs,bOrders);
-  return {...businessPublicView(b),leadStatus:b.leadStatus||"OPEN",advisorOutcome:b.advisorOutcome||"OPEN",lastContactAt:b.lastContactAt||null,followUpAt:b.followUpAt||null,salesNotes:b.salesNotes||"",source:b.source||"STAFF_CREATED",latestQuote:bQuotes[0]?{id:bQuotes[0].id,quoteNumber:bQuotes[0].quoteNumber,status:bQuotes[0].status,monthlyMin:bQuotes[0].monthlyMin,monthlyMax:bQuotes[0].monthlyMax,createdAt:bQuotes[0].createdAt}:null,latestOrder:bOrders[0]?{id:bOrders[0].id,status:bOrders[0].status,updatedAt:bOrders[0].updatedAt}:null,pendingDocuments:bDocs.filter(d=>d.reviewStatus!=="VERIFIED").length,whatsappConsent:bConsents.length?!!bConsents[0].granted:false,...score};
+  return {...businessStaffView(b),leadStatus:b.leadStatus||"OPEN",advisorOutcome:b.advisorOutcome||"OPEN",lastContactAt:b.lastContactAt||null,followUpAt:b.followUpAt||null,salesNotes:b.salesNotes||"",source:b.source||"STAFF_CREATED",latestQuote:bQuotes[0]?{id:bQuotes[0].id,quoteNumber:bQuotes[0].quoteNumber,status:bQuotes[0].status,monthlyMin:bQuotes[0].monthlyMin,monthlyMax:bQuotes[0].monthlyMax,createdAt:bQuotes[0].createdAt}:null,latestOrder:bOrders[0]?{id:bOrders[0].id,status:bOrders[0].status,updatedAt:bOrders[0].updatedAt}:null,pendingDocuments:bDocs.filter(d=>d.reviewStatus!=="VERIFIED").length,whatsappConsent:bConsents.length?!!bConsents[0].granted:false,...score};
  });
  rows.sort((a,b)=>b.score-a.score||new Date(a.followUpAt||a.updatedAt||0)-new Date(b.followUpAt||b.updatedAt||0));
+ await audit(req,"LEAD_QUEUE_VIEWED","Business",null,{count:rows.length});
  res.set("Cache-Control","no-store");res.json({leads:rows,summary:{total:rows.length,high:rows.filter(x=>x.priority==="HIGH").length,medium:rows.filter(x=>x.priority==="MEDIUM").length,low:rows.filter(x=>x.priority==="LOW").length},scoreNote:"Priority score is a transparent rule-based call queue aid, not a validated conversion probability."});
 }));
 app.patch("/api/staff/leads/:id",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
