@@ -253,6 +253,21 @@ app.post("/api/auth/login", asyncRoute(async(req,res) => {
 }));
 app.get("/api/auth/me",auth,(req,res)=>res.json({user:req.user}));
 
+const leadIntakeRequests=new Map();
+app.post("/api/leads/intake",asyncRoute(async(req,res)=>{
+  const now=Date.now(),key=req.ip||"unknown",recent=(leadIntakeRequests.get(key)||[]).filter(t=>now-t<3600000);
+  if(recent.length>=8)return res.status(429).json({error:"Too many callback requests. Please try again later."});
+  const input=validate(z.object({name:z.string().min(2).max(160),phone:z.string().regex(/^\+?[1-9]\d{7,14}$/),email:z.union([z.email(),z.literal("")]).optional(),type:z.string().max(80).optional(),segment:z.enum(["prof","micro","multi","mfg"]).default("prof"),city:z.string().min(2).max(100),cityTier:z.enum(["1","2"]).default("2"),employees:z.number().int().min(1).max(100000).default(1),sites:z.number().int().min(1).max(10000).default(1),budget:z.number().nonnegative().max(100000000).optional(),need:z.string().max(500).optional(),preferredLang:z.string().max(20).default("en"),consent:z.literal(true),source:z.string().max(40).default("WEB_ADVISOR")}),req.body);
+  recent.push(now);leadIntakeRequests.set(key,recent);
+  const phoneVault=encryptSensitive(input.phone,"business-phone"),emailVault=encryptSensitive(input.email||undefined,"business-email");
+  const existing=await prisma.business.findFirst({where:{phoneToken:phoneVault.token}});
+  const profile={name:input.name,type:input.type||"other",segment:input.segment,city:input.city,cityTier:input.cityTier,employees:input.employees,sites:input.sites,budget:input.budget,need:input.need,preferredLang:input.preferredLang};
+  const business=existing?await prisma.business.update({where:{id:existing.id},data:{...profile,phoneCiphertext:phoneVault.ciphertext,phoneToken:phoneVault.token,emailCiphertext:emailVault.ciphertext,emailToken:emailVault.token,leadStatus:existing.leadStatus||"OPEN",advisorOutcome:existing.advisorOutcome||"OPEN",source:existing.source||input.source}}):await prisma.business.create({data:{...profile,phoneCiphertext:phoneVault.ciphertext,phoneToken:phoneVault.token,emailCiphertext:emailVault.ciphertext,emailToken:emailVault.token,leadStatus:"OPEN",advisorOutcome:"OPEN",source:input.source}});
+  await prisma.consent.create({data:{businessId:business.id,purpose:"sales_callback_and_follow_up",channel:"WEB",version:"web-callback-v1",granted:true,evidence:{ipToken:req.ip?tokenizeSensitive(req.ip,"consent-ip"):null,userAgent:req.headers["user-agent"]||null}}});
+  res.status(existing?200:201).json({leadId:business.id,status:"OPEN",message:"Your callback request has been recorded for the Airtel Udyam demo workflow."});
+}));
+
+
 // Business profile and consent
 app.post("/api/businesses",auth,allow("ADMIN","SALES"),asyncRoute(async(req,res)=>{
   const data=validate(businessSchema,req.body);
@@ -435,34 +450,69 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
   res.sendStatus(200);
 }));
 app.post("/api/channels/whatsapp/send",auth,allow("ADMIN","REVIEWER","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
-  const input=validate(z.object({to:z.string().regex(/^\+?[1-9]\d{7,14}$/),text:z.string().min(1).max(4096),businessId:z.string().min(1)}),req.body);
+  const input=validate(z.object({to:z.string().regex(/^\+?[1-9]\d{7,14}$/).optional(),text:z.string().min(1).max(4096),businessId:z.string().min(1)}),req.body);
   if(!process.env.WHATSAPP_TOKEN||!process.env.WHATSAPP_PHONE_NUMBER_ID)return res.status(503).json({error:"WhatsApp Cloud API credentials are not configured"});
   const business=await prisma.business.findUnique({where:{id:input.businessId}});
   if(!business)return res.status(404).json({error:"Business not found"});
   const normalisePhone=value=>String(value||"").replace(/\D/g,"");
   const recordedPhone=decryptSensitive(business.phoneCiphertext)||business.phone||"";
-  if(!recordedPhone||normalisePhone(recordedPhone)!==normalisePhone(input.to))return res.status(403).json({error:"Messages can only be sent to the contact number recorded for this business"});
+  const targetPhone=input.to||recordedPhone;if(!recordedPhone||normalisePhone(recordedPhone)!==normalisePhone(targetPhone))return res.status(403).json({error:"Messages can only be sent to the contact number recorded for this business"});
   const consent=await prisma.consent.findFirst({where:{businessId:business.id,channel:"WHATSAPP"},orderBy:{createdAt:"desc"}});
   if(!consent?.granted)return res.status(403).json({error:"Current WhatsApp messaging consent is required before sending a message"});
   const response=await fetch(`https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION||"v23.0"}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{
     method:"POST",headers:{Authorization:`Bearer ${process.env.WHATSAPP_TOKEN}`,"Content-Type":"application/json"},
-    body:JSON.stringify({messaging_product:"whatsapp",recipient_type:"individual",to:input.to.replace("+",""),type:"text",text:{preview_url:false,body:input.text}})
+    body:JSON.stringify({messaging_product:"whatsapp",recipient_type:"individual",to:targetPhone.replace("+",""),type:"text",text:{preview_url:false,body:input.text}})
   });
   const payload=await response.json();
   if(!response.ok)return res.status(502).json({error:"WhatsApp provider rejected the message"});
   const providerId=payload.messages?.[0]?.id||null;
-  const recipientVault=encryptSensitive(input.to,"whatsapp-recipient:"+input.businessId);
+  const recipientVault=encryptSensitive(targetPhone,"whatsapp-recipient:"+input.businessId);
   const bodyVault=encryptSensitive(input.text,"whatsapp-body:"+input.businessId);
   const providerVault=encryptSensitive(JSON.stringify(payload),"whatsapp-provider:"+String(providerId||"unknown"));
   const message=await prisma.message.create({data:{
     businessId:input.businessId,channel:"WHATSAPP",direction:"OUTBOUND",providerId,
-    fromAddress:process.env.WHATSAPP_PHONE_NUMBER_ID,toAddress:mask(input.to),body:null,
+    fromAddress:process.env.WHATSAPP_PHONE_NUMBER_ID,toAddress:mask(targetPhone),body:null,
     toAddressCiphertext:recipientVault.ciphertext,toAddressToken:recipientVault.token,
     bodyCiphertext:bodyVault.ciphertext,bodyToken:bodyVault.token,
     payloadCiphertext:providerVault.ciphertext,payloadToken:providerVault.token,status:"SENT"
   }});
   await audit(req,"WHATSAPP_MESSAGE_SENT","Message",message.id,{to:mask(input.to)});
   res.status(201).json({messageId:message.id,status:"SENT"});
+}));
+
+
+function scoreLead(business,quotes,documents,orders){
+ const reasons=[];let score=22;const latestQuote=quotes[0],latestOrder=orders[0],pendingDocs=documents.filter(d=>d.reviewStatus!=="VERIFIED");
+ if(latestQuote&&!latestOrder){score+=24;reasons.push("Quote exists but no order has started")}else if(!latestQuote){score+=10;reasons.push("No quote created yet")}
+ if(latestOrder&&["DRAFT","QUOTED","KYC_PENDING","UNDER_REVIEW","REJECTED"].includes(latestOrder.status)){score+=18;reasons.push("Order journey needs follow-up")}
+ if(pendingDocs.length){score+=12;reasons.push("Verification documents need attention")}
+ if(!business.lastContactAt){score+=12;reasons.push("No staff contact is recorded")}
+ if(business.followUpAt&&new Date(business.followUpAt).getTime()<=Date.now()){score+=14;reasons.push("Follow-up is due or overdue")}
+ const completeness=["name","city","segment","phoneToken"].filter(k=>Boolean(business[k])).length;
+ if(completeness>=4){score+=8;reasons.push("Contact and business profile are complete")}
+ if(business.segment==="prof"){score+=5;reasons.push("Professional-office pilot segment")}
+ const ageDays=(Date.now()-new Date(business.updatedAt||business.createdAt||Date.now()).getTime())/86400000;
+ if(ageDays>=7){score+=8;reasons.push("Lead has been inactive for 7+ days")}
+ if(business.advisorOutcome==="NEEDS_INFO"){score+=5;reasons.push("Advisor needs more information")}
+ score=Math.max(0,Math.min(100,score));
+ const nextAction=latestOrder?.status==="KYC_PENDING"?"Call to resolve KYC blockers":latestQuote&&!latestOrder?"Call to review the quote":!latestQuote?"Call to understand needs and build a bundle":"Call to confirm the next onboarding step";
+ return {score,priority:score>=70?"HIGH":score>=45?"MEDIUM":"LOW",reasons,nextAction};
+}
+app.get("/api/staff/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
+ const [businesses,quotes,documents,orders]=await Promise.all([prisma.business.findMany({orderBy:{updatedAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}})]);
+ const rows=businesses.filter(b=>!["WON","LOST","CLOSED_WON","CLOSED_LOST"].includes(b.advisorOutcome||"OPEN")).map(b=>{
+  const bQuotes=quotes.filter(q=>q.businessId===b.id),bDocs=documents.filter(d=>d.businessId===b.id),bOrders=orders.filter(o=>o.businessId===b.id),score=scoreLead(b,bQuotes,bDocs,bOrders);
+  return {...businessPublicView(b),leadStatus:b.leadStatus||"OPEN",advisorOutcome:b.advisorOutcome||"OPEN",lastContactAt:b.lastContactAt||null,followUpAt:b.followUpAt||null,salesNotes:b.salesNotes||"",source:b.source||"STAFF_CREATED",latestQuote:bQuotes[0]?{id:bQuotes[0].id,quoteNumber:bQuotes[0].quoteNumber,status:bQuotes[0].status,monthlyMin:bQuotes[0].monthlyMin,monthlyMax:bQuotes[0].monthlyMax,createdAt:bQuotes[0].createdAt}:null,latestOrder:bOrders[0]?{id:bOrders[0].id,status:bOrders[0].status,updatedAt:bOrders[0].updatedAt}:null,pendingDocuments:bDocs.filter(d=>d.reviewStatus!=="VERIFIED").length,...score};
+ });
+ rows.sort((a,b)=>b.score-a.score||new Date(a.followUpAt||a.updatedAt||0)-new Date(b.followUpAt||b.updatedAt||0));
+ res.set("Cache-Control","no-store");res.json({leads:rows,summary:{total:rows.length,high:rows.filter(x=>x.priority==="HIGH").length,medium:rows.filter(x=>x.priority==="MEDIUM").length,low:rows.filter(x=>x.priority==="LOW").length},scoreNote:"Priority score is a transparent rule-based call queue aid, not a validated conversion probability."});
+}));
+app.patch("/api/staff/leads/:id",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
+ const input=validate(z.object({advisorOutcome:z.enum(["OPEN","CONTACTED","NEEDS_INFO","QUOTE_SHARED","NOT_INTERESTED","WON","LOST"]),salesNotes:z.string().max(1200).optional(),followUpAt:z.union([z.string().datetime(),z.literal("")]).optional(),contacted:z.boolean().default(false)}),req.body);
+ const business=await prisma.business.findUnique({where:{id:req.params.id}});if(!business)return res.status(404).json({error:"Lead not found"});
+ const updated=await prisma.business.update({where:{id:business.id},data:{advisorOutcome:input.advisorOutcome,leadStatus:["WON","LOST"].includes(input.advisorOutcome)?"CLOSED":input.advisorOutcome,salesNotes:input.salesNotes??business.salesNotes??"",followUpAt:input.followUpAt||null,...(input.contacted?{lastContactAt:new Date().toISOString()}: {})}});
+ await audit(req,"LEAD_FOLLOWUP_UPDATED","Business",business.id,{advisorOutcome:input.advisorOutcome,contacted:input.contacted,followUpAt:input.followUpAt||null});
+ res.json({lead:businessPublicView(updated),message:"Lead follow-up saved."});
 }));
 
 // Integration status, reviewer queue and audit access
