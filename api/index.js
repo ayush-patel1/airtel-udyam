@@ -540,15 +540,16 @@ app.post("/api/admin/dataset/import",auth,allow("ADMIN"),asyncRoute(async(req,re
   const analytics=buildTrackAAnalytics(leads);
   const byId=(rows,key)=>Object.fromEntries(rows.map(row=>[row[key],row]));
   const db=trackARef();
+  const kycById=Object.fromEntries(docs.map(d=>[String(d.fileName).replace(/\.png$/i,""),d]));
   await Promise.all([
-    db.child("manifest").set({version:"track-a-2026-07-15-v1",importedAt:new Date().toISOString(),importedBy:req.user.sub,synthetic:true,counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15"}),
     db.child("catalogue").set(byId(products,"product_id")),
     db.child("leads").set(byId(leads,"lead_id")),
     db.child("gstinRegistry").set(byId(gstin,"gstin")),
     db.child("udyamRegistry").set(byId(udyam,"udyam_number")),
-    db.child("kycDocuments").set(byId(docs,"fileName")),
+    db.child("kycDocuments").set(kycById),
     db.child("analytics").set(analytics)
   ]);
+  await db.child("manifest").set({version:"track-a-2026-07-15-v1",importedAt:new Date().toISOString(),importedBy:req.user.sub,synthetic:true,counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15"});
   await audit(req,"TRACKA_DATASET_IMPORTED","TrackADataset",null,{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length}});
   res.status(201).json({ok:true,manifest:{counts:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},dataAsOf:"2026-07-15",synthetic:true},analytics});
 }));
