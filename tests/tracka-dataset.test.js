@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCsv, buildTrackAAnalytics, scoreTrackALead, lookupGstin, lookupUdyam, analyseKycSamples } from "../api/lib/tracka-dataset.js";
+import { parseCsv, buildTrackAAnalytics, scoreTrackALead, lookupGstin, lookupUdyam, analyseKycSamples, buildTrackAEstimate } from "../api/lib/tracka-dataset.js";
 
 test("CSV parser handles commas, escaped quotes and embedded newlines",()=>{
   const rows=parseCsv('id,name,note\n1,"A, B","said ""hello"""\n2,"Line one\nLine two",ok\n');
@@ -20,6 +20,15 @@ test("lead score explains quote and KYC recovery next steps",()=>{
   assert.equal(quote.priority,"HIGH");assert.match(quote.nextAction,/KYC/);assert.ok(quote.reasons.length>=2);
   const cold=scoreTrackALead({stage_reached:"Lead",drop_reason:"Unreachable after 3 attempts"});
   assert.ok(cold.score<quote.score);
+});
+test("quote engine honours imported catalogue eligibility, dependencies and prices",()=>{
+  const products=[
+    {product_id:"P01",product_name:"Fibre",category:"Connectivity",unit:"per site",price_min_inr_per_month:"999",price_max_inr_per_month:"1199",one_time_setup_inr:"0",min_contract_months:"12",available_city_tiers:"1;2",min_employees:"1",min_sites:"1",requires_gstin:"N",requires_one_of:"",target_segments:"micro;prof"},
+    {product_id:"P09",product_name:"Backup",category:"Connectivity",unit:"per site",price_min_inr_per_month:"499",price_max_inr_per_month:"599",one_time_setup_inr:"1500",min_contract_months:"12",available_city_tiers:"1;2",min_employees:"1",min_sites:"1",requires_gstin:"N",requires_one_of:"P01|P02",target_segments:"prof"}
+  ];
+  const estimate=buildTrackAEstimate({cityTier:"1",segment:"prof",employees:5,sites:1,gstin:""},[{sku:"P01",quantity:1},{sku:"P09",quantity:1}],products);
+  assert.equal(estimate.monthlyMin,1498);assert.equal(estimate.monthlyMax,1798);assert.equal(estimate.setupTotal,1500);assert.equal(estimate.pricingSource,"TRACKA_IMPORTED_CATALOGUE");
+  assert.throws(()=>buildTrackAEstimate({cityTier:"1",segment:"prof",employees:5,sites:1},[{sku:"P09",quantity:1}],products),/requires a compatible base connectivity/);
 });
 test("mock registries return masked synthetic records",()=>{
   const gst=lookupGstin([{gstin:"32TTNXB7384T1ZW",legal_name:"Example LLP",trade_name:"Example",constitution:"LLP",principal_place_of_business:"Demo address",state:"Kerala",registration_date:"2020-01-01",status:"Active"}],"32TTNXB7384T1ZW");
