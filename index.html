@@ -412,7 +412,7 @@
  .print-note{background:#fff6f6;border-left:3px solid #e31b36;padding:10px;font-size:8px;line-height:1.55;color:#596579;margin-top:18px}
  .print-footer{margin-top:25px;padding-top:9px;border-top:1px solid #e4e7ec;font-size:8px;color:#8992a2;display:flex;justify-content:space-between}
 }
-</style></head><body>
+</style><style>.lead-message-history{margin-top:14px;padding-top:12px;border-top:1px solid #e8edf2}.lead-message-history>b{display:block;font:700 10px Manrope;margin-bottom:9px;color:#344054}.lead-message{padding:9px 10px;border:1px solid #e8edf2;border-radius:9px;margin:7px 0;background:#fff}.lead-message.outbound{background:#fff7f8;border-color:#f5d8dd;margin-left:16px}.lead-message.inbound{margin-right:16px}.lead-message>div{display:flex;justify-content:space-between;gap:8px}.lead-message b{font-size:9px}.lead-message small{font-size:8px;color:#8792a2}.lead-message p{font-size:10px;line-height:1.5;margin:7px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body>
 <section id="welcomeGate" class="welcome-gate">
   <div class="welcome-nav"><div class="welcome-brand"><img src="https://s3-ap-southeast-1.amazonaws.com/bsy/iportal/images/airtel-logo-red-text-horizontal.jpg" alt="Airtel" width="104" height="42"><span>AIRTEL BUSINESS<br><small>UDYAM ONESHOT</small></span></div><div class="welcome-controls"><span class="welcome-live"><i></i> BUSINESS, IN MOTION</span><select id="welcomeLanguage" aria-label="Website language" onchange="setAssistantLanguage(this.value)"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">हिन्दी</option><option value="hi-Latn">Hinglish</option><option value="bn">বাংলা</option><option value="mr">मराठी</option><option value="ta">தமிழ்</option><option value="te">తెలుగు</option><option value="gu">ગુજરાતી</option><option value="kn">ಕನ್ನಡ</option><option value="ml">മലയാളം</option><option value="pa">ਪੰਜਾਬੀ</option></select></div></div>
   <div class="welcome-main"><div class="welcome-copy"><div class="welcome-eyebrow">Your business, moving forward</div><h1>Good business starts with<br><em>the right connection.</em></h1><p class="welcome-lead">Everything your business needs, in one place.</p><p class="welcome-body">Start with Udyam Assistant for personalised help, service recommendations and next steps. Once inside, follow the guided Business Missions in the bottom-left corner to learn the workspace and earn XP.</p><button class="welcome-enter" onclick="enterWorkspace()">Chat with Udyam Assistant →</button><div class="welcome-trust"><span>01 / DISCOVER</span><b>—</b><span>02 / CONFIGURE</span><b>—</b><span>03 / GROW</span></div></div><div class="welcome-stage msme-stage" aria-label="Illustration of a connected small business">
@@ -509,7 +509,7 @@
  <div class="lead-desk-layout"><div class="card"><h3>Leads needing follow-up</h3><div id="leadDeskList" class="lead-desk-list"><div class="review-empty">No lead data loaded.</div></div></div>
  <div class="card lead-detail"><h3 id="leadDetailTitle">Select a lead</h3><p class="sectionhint" id="leadDetailMeta">Choose a lead to view the recommended next action and update its outcome.</p><div id="leadScoreFactors" class="lead-score-factors"></div><div class="lead-contact-actions"><a id="leadCallLink" class="btn ghost small" href="#" aria-disabled="true">Call customer</a><a id="leadEmailLink" class="btn ghost small" href="#" aria-disabled="true">Email customer</a></div>
  <div class="fields"><div class="field"><label for="leadOutcome">Advisor outcome</label><select id="leadOutcome"><option value="OPEN">Open</option><option value="CONTACTED">Contacted</option><option value="NEEDS_INFO">Needs more information</option><option value="QUOTE_SHARED">Quote shared</option><option value="NOT_INTERESTED">Not interested</option><option value="WON">Won</option><option value="LOST">Lost</option></select></div><div class="field"><label for="leadFollowUp">Next follow-up</label><input id="leadFollowUp" type="datetime-local"></div><div class="field full"><label for="leadSalesNotes">Sales notes</label><textarea id="leadSalesNotes" rows="3" maxlength="1200" placeholder="Record blockers, customer questions and next steps…"></textarea></div></div><div class="formactions"><button class="btn" onclick="saveLeadFollowup()">Save follow-up</button></div>
- <div class="lead-whatsapp"><h4>WhatsApp follow-up</h4><p class="hint" id="leadWhatsAppStatus">Available only when the customer separately opted in and WhatsApp is configured.</p><textarea id="leadWhatsAppText" rows="3" placeholder="Write a short, relevant follow-up message…"></textarea><button class="btn ghost small" onclick="sendLeadWhatsApp()">Send WhatsApp message</button></div></div></div>
+ <div class="lead-whatsapp"><h4>WhatsApp follow-up</h4><p class="hint" id="whatsAppIntegrationStatus">Checking Meta WhatsApp configuration…</p><p class="hint" id="leadWhatsAppStatus">Select a lead to see consent status.</p><textarea id="leadWhatsAppText" rows="3" placeholder="Write a short, relevant follow-up message…" disabled></textarea><button class="btn ghost small" id="sendLeadWhatsAppBtn" onclick="sendLeadWhatsApp()" disabled>Send WhatsApp message</button><div class="lead-message-history"><b>Conversation history</b><div id="leadWhatsAppHistory" class="review-empty">Select a lead to load messages.</div></div></div></div></div>
  <p class="hint">Use the score to order human follow-up, not to deny service, change pricing or make eligibility decisions. All follow-up changes are audit logged.</p>
 </section>
 <section class="view" id="insights"><div class="eyebrow">CASE DATASET · LIVE FROM IMPORTED PACK</div><h1>Find the friction. Fix the journey.</h1><p class="sub">All metrics below are computed from the imported synthetic Track A data, not actual Airtel customer performance.</p><div id="insightsDatasetState" class="note">Import the Track A ZIP in Sales Lead Desk to load the full dataset metrics.</div><div class="metrics" id="insightsMetrics"></div><div class="cols"><div class="card"><h3>Segment snapshot</h3><div id="insightsSegments"></div></div><div class="card"><h3>Channel performance</h3><div id="insightsChannels"></div></div></div><div class="card"><h3>Top drop reasons</h3><div id="insightsDrops"></div></div></section>
@@ -1094,7 +1094,7 @@ async function requestAdvisorCallback(){
 async function renderLeadDesk(){
  if(!staffSession||!canAccessView("leads"))return;
  checkTrackAStatus();
- $("leadDeskStatus").textContent="Loading sales leads…";
+ $("leadDeskStatus").textContent="Loading sales leads…";loadWhatsAppIntegrationStatus();
  $("leadDeskList").innerHTML='<div class="review-empty">Loading prioritised callback requests…</div>';
  try{
   const response=await fetch("/api/staff/leads",{headers:staffApiHeaders(),signal:AbortSignal.timeout(15000)}),data=await response.json();
@@ -1121,8 +1121,11 @@ function selectLead(id){
  $("leadOutcome").value=lead.advisorOutcome||"OPEN";$("leadSalesNotes").value=lead.salesNotes||"";
  const follow=lead.followUpAt?new Date(lead.followUpAt):null;
  $("leadFollowUp").value=follow&&!Number.isNaN(follow.getTime())?new Date(follow.getTime()-follow.getTimezoneOffset()*60000).toISOString().slice(0,16):"";
- $("leadWhatsAppStatus").textContent=lead.whatsappConsent?"Customer opted in to WhatsApp follow-up.":"No WhatsApp opt-in recorded; use another consented channel.";
+ const callbackText=lead.callbackConsent?"Callback consent: granted"+(lead.callbackConsentAt?" · "+new Date(lead.callbackConsentAt).toLocaleString():""):"Callback consent: not recorded";
+ const waText=lead.whatsappConsent?"WhatsApp opt-in: granted"+(lead.whatsappConsentAt?" · "+new Date(lead.whatsappConsentAt).toLocaleString():""):"WhatsApp opt-in: not granted";
+ $("leadWhatsAppStatus").textContent=callbackText+" · "+waText;
  $("leadWhatsAppText").disabled=!lead.whatsappConsent;$("leadWhatsAppText").placeholder=lead.whatsappConsent?"Write a short, relevant follow-up message…":"WhatsApp is disabled until the customer opts in.";
+ $("sendLeadWhatsAppBtn").disabled=!lead.whatsappConsent;loadLeadWhatsAppHistory(id);
 }
 async function saveLeadFollowup(){
  if(!selectedLeadId)return toast("Select a lead first.");
@@ -1133,6 +1136,18 @@ async function saveLeadFollowup(){
   toast("Lead follow-up saved.","success");await renderLeadDesk();
  }catch(error){toast(error.message,"error")}finally{button.disabled=false}
 }
+async function loadWhatsAppIntegrationStatus(){
+ const el=$("whatsAppIntegrationStatus");if(!el)return;
+ try{const r=await fetch("/api/staff/integrations/whatsapp/status",{headers:staffApiHeaders()}),d=await r.json();if(!r.ok)throw new Error(d.error||"Status unavailable");
+ el.textContent=(d.configured?"Meta Cloud API: sending configured":"Meta Cloud API: credentials missing")+". "+(d.webhookConfigured?"Delivery/inbound webhook configured.":"Webhook verification not configured.")+" Required Vercel variables: "+d.requiredEnvironment.join(", ")+".";
+ }catch(e){el.textContent="Could not check WhatsApp configuration: "+e.message}
+}
+async function loadLeadWhatsAppHistory(id){
+ const box=$("leadWhatsAppHistory");if(!box)return;box.textContent="Loading conversation…";
+ try{const r=await fetch("/api/staff/leads/"+encodeURIComponent(id)+"/messages",{headers:staffApiHeaders()}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not load messages");
+ box.innerHTML=d.messages?.length?d.messages.map(m=>'<div class="lead-message '+(m.direction==="OUTBOUND"?"outbound":"inbound")+'"><div><b>'+escHtml(m.direction==="OUTBOUND"?"You":"Customer")+'</b><small>'+escHtml(m.status||"RECEIVED")+' · '+new Date(m.createdAt).toLocaleString()+'</small></div><p>'+escHtml(m.body||"[Media or non-text message]")+'</p></div>').join(""):'<div class="review-empty">No WhatsApp messages yet. New inbound messages appear here after the Meta webhook is configured.</div>';
+ }catch(e){box.textContent=e.message}
+}
 async function sendLeadWhatsApp(){
  const lead=leadDeskRows.find(x=>x.id===selectedLeadId),message=$("leadWhatsAppText").value.trim();
  if(!lead)return toast("Select a lead first.");if(!lead.whatsappConsent)return toast("WhatsApp opt-in is required before messaging.");
@@ -1140,7 +1155,7 @@ async function sendLeadWhatsApp(){
  try{
   const response=await fetch("/api/channels/whatsapp/send",{method:"POST",headers:staffApiHeaders(),body:JSON.stringify({businessId:lead.id,text:message}),signal:AbortSignal.timeout(20000)});
   const data=await response.json();if(!response.ok)throw new Error(data.error||"WhatsApp message could not be sent");
-  $("leadWhatsAppText").value="";toast("WhatsApp message sent · "+(data.status||"accepted"),"success");
+  $("leadWhatsAppText").value="";toast("WhatsApp message accepted by Meta · "+(data.status||"accepted"),"success");await loadLeadWhatsAppHistory(selectedLeadId);
  }catch(error){toast(error.message,"error")}
 }
 
