@@ -534,6 +534,7 @@ app.post("/api/admin/dataset/import",auth,allow("ADMIN"),asyncRoute(async(req,re
   const docs=Array.isArray(pack.kycDocuments)?pack.kycDocuments:[];
   if(products.length!==25||leads.length!==5000||gstin.length!==3534||udyam.length!==2723||docs.length!==47)return res.status(422).json({error:"Dataset row counts do not match the supplied Track A pack.",received:{products:products.length,leads:leads.length,gstin:gstin.length,udyam:udyam.length,kycDocuments:docs.length},expected:{products:25,leads:5000,gstin:3534,udyam:2723,kycDocuments:47}});
   if(docs.some(d=>!/^K\d{2}_[a-z_]+\.png$/i.test(d.fileName||"")||typeof d.imageBase64!=="string"||typeof d.ocrText!=="string"))return res.status(400).json({error:"One or more KYC specimen files are incomplete."});
+  if(docs.reduce((sum,d)=>sum+String(d.imageBase64||"").length,0)>14*1024*1024)return res.status(413).json({error:"KYC specimen images exceed the import size limit."});
   const analytics=buildTrackAAnalytics(leads);
   const byId=(rows,key)=>Object.fromEntries(rows.map(row=>[row[key],row]));
   const db=trackARef();
@@ -553,19 +554,19 @@ app.get("/api/admin/dataset/status",auth,allow("ADMIN","SALES","OPERATIONS","REV
   const snap=await trackARef().child("manifest").get();res.set("Cache-Control","no-store");res.json({imported:snap.exists(),manifest:snap.val()||null});
 }));
 app.get("/api/catalogue",asyncRoute(async(req,res)=>{
-  const snap=await trackARef().child("catalogue").get();
+  let snap;try{snap=await trackARef().child("catalogue").get();}catch{snap=null;}
   if(snap.exists()){res.set("Cache-Control","public, max-age=300");return res.json({products:Object.values(snap.val()),source:"TRACKA_SYNTHETIC_CATALOGUE",version:"track-a-2026-07-15-v1"});}
   res.json({products:[...CATALOGUE.values()],source:"BUILT_IN_CASE_CATALOGUE",version:CATALOGUE_VERSION});
 }));
 app.get("/api/mock/gstin/:gstin",asyncRoute(async(req,res)=>{
   const raw=String(req.params.gstin||"").toUpperCase();if(!/^\d{2}[A-Z0-9]{13}$/i.test(raw))return res.status(400).json({error:"Enter a 15-character GSTIN."});
-  const snap=await trackARef().child("gstinRegistry").child(raw).get();
+  let snap;try{snap=await trackARef().child("gstinRegistry").child(raw).get();}catch{return res.status(503).json({error:"Synthetic registry is not imported yet."});}
   if(!snap.exists())return res.json({found:false,status:"NOT_FOUND",registry:"SYNTHETIC",message:"No match in the mock registry."});
   res.set("Cache-Control","no-store");res.json(lookupGstin([snap.val()],raw));
 }));
 app.get("/api/mock/udyam/:number",asyncRoute(async(req,res)=>{
   const raw=String(req.params.number||"").toUpperCase();if(!/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/i.test(raw))return res.status(400).json({error:"Enter a valid Udyam registration number."});
-  const snap=await trackARef().child("udyamRegistry").child(raw).get();
+  let snap;try{snap=await trackARef().child("udyamRegistry").child(raw).get();}catch{return res.status(503).json({error:"Synthetic registry is not imported yet."});}
   if(!snap.exists())return res.json({found:false,status:"NOT_FOUND",registry:"SYNTHETIC",message:"No match in the mock registry."});
   res.set("Cache-Control","no-store");res.json(lookupUdyam([snap.val()],raw));
 }));
@@ -590,7 +591,7 @@ app.get("/api/staff/dataset/kyc-samples/:applicantId",auth,allow("ADMIN","REVIEW
   const snap=await trackARef().child("kycDocuments").get();if(!snap.exists())return res.status(404).json({error:"Import the Track A dataset first."});
   const docs=Object.values(snap.val()||{}).filter(d=>d.applicant_id===req.params.applicantId);
   if(!docs.length)return res.status(404).json({error:"Applicant sample not found."});
-  const groups=analyseKycSamples(docs);res.set("Cache-Control","no-store");res.json({applicant:groups[0],documents:docs.map(d=>({...d,imageDataUrl:"data:image/png;base64,"+d.imageBase64}))});
+  const groups=analyseKycSamples(docs);const redact=text=>String(text||"").replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/gi,"•••••••••••••••").replace(/UDYAM-[A-Z]{2}-\d{2}-\d{7}/gi,"UDYAM-••-••-•••••••").replace(/SYN-ID-\d+/gi,"SYN-ID-••••••").replace(/\b\d{10}\b/g,"••••••"+String(text||"").match(/\d{10}/)?.[0]?.slice(-4));res.set("Cache-Control","no-store");res.json({applicant:groups[0],documents:docs.map(d=>({...d,ocr_text:redact(d.ocr_text),imageDataUrl:"data:image/png;base64,"+d.imageBase64}))});
 }));
 
 // Integration status, reviewer queue and audit access
