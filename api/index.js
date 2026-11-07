@@ -456,7 +456,7 @@ app.post("/api/webhooks/whatsapp",asyncRoute(async(req,res)=>{
       const encryptedStatus=encryptSensitive(JSON.stringify(status),"whatsapp-status:"+eventKey);
       await prisma.integrationEvent.upsert({where:{eventKey},create:{provider:"WHATSAPP",eventKey,eventType:"message_status",payloadCiphertext:encryptedStatus.ciphertext,payloadToken:encryptedStatus.token},update:{}});
       const deliveryStatus=String(status.status||"").toUpperCase();
-      if(["SENT","DELIVERED","READ","FAILED"].includes(deliveryStatus))await prisma.message.updateMany({where:{providerId:status.id},data:{status:deliveryStatus}});
+      if(["SENT","DELIVERED","READ","FAILED"].includes(deliveryStatus)){const sentMessage=await prisma.message.findFirst({where:{providerId:status.id}});if(sentMessage)await prisma.message.update({where:{id:sentMessage.id},data:{status:deliveryStatus}});}
     }
   }
   res.sendStatus(200);
