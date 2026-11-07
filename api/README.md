@@ -63,3 +63,16 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 - OCR is extraction only; it does not authenticate documents. Human review is mandatory.
 - Audit events are recorded for auth, business, consent, quote, KYC, order and WhatsApp actions.
 - Before production, add distributed rate limiting/WAF, CSRF strategy if using cookies, refresh-token rotation, durable queue processing, automated integration tests, backup/restore drills, monitoring/alerts and a formal privacy/retention policy. WhatsApp signature validation is implemented and requires `WHATSAPP_APP_SECRET`; it must be configured before webhook events are accepted.
+
+
+## Track A synthetic dataset
+
+- Staff-only `POST /api/admin/dataset/import` accepts a gzip-compressed JSON envelope containing the four source CSV strings and 47 KYC specimen PNGs with browser-extracted OCR text. ADMIN role is mandatory; the import verifies exact expected row/document counts and writes the pack under Firebase Realtime Database `trackA/dataset`.
+- `GET /api/admin/dataset/status` reports the imported manifest and counts.
+- `GET /api/catalogue` returns the imported catalogue when present, otherwise the bundled case catalogue.
+- `GET /api/mock/gstin/:gstin` and `GET /api/mock/udyam/:number` perform exact lookups against the imported fictional registries. Responses are explicitly marked synthetic; they are not connected to GSTN or the Udyam portal.
+- `GET /api/staff/dataset/analytics` returns computed funnel, segment, channel, drop-reason, CAC, activation-time, churn and NPS aggregates.
+- `GET /api/staff/dataset/leads` returns a filtered, paginated lead view and a transparent call-priority score. This is not a calibrated conversion probability.
+- `GET /api/staff/dataset/kyc-samples` and `GET /api/staff/dataset/kyc-samples/:applicantId` are limited to ADMIN/REVIEWER and return sample OCR, validation flags and specimen images. OCR is advisory; human review is mandatory.
+
+Dataset import requires Firebase credentials and the existing encryption/tokenization keys. Browser ZIP import uses JSZip and Tesseract.js from CDN; the 47 KYC specimen images are OCR-processed in the browser before upload. The dataset is fictional, but the app still masks registry identifiers in responses and keeps sample documents behind staff authentication.

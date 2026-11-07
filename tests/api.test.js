@@ -51,6 +51,25 @@ test("callback intake requires explicit contact consent", async () => {
   assert.equal(response.status, 400);
 });
 
+test("dataset analytics is protected by staff authentication", async () => {
+  const response = await fetch(baseUrl + "/api/staff/dataset/analytics");
+  assert.equal(response.status, 401);
+});
+
+test("dataset import is protected by ADMIN authentication", async () => {
+  const response = await fetch(baseUrl + "/api/admin/dataset/import", {
+    method: "POST", headers: { "Content-Type": "application/gzip" }, body: Buffer.from("not-a-gzip-payload")
+  });
+  assert.equal(response.status, 401);
+});
+
+test("catalogue endpoint remains available before Firebase dataset import", async () => {
+  const response = await fetch(baseUrl + "/api/catalogue");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.products.length, 25);
+});
+
 test("WhatsApp webhook fails closed when signature secret is not configured", async () => {
   const previous = process.env.WHATSAPP_APP_SECRET;
   delete process.env.WHATSAPP_APP_SECRET;
