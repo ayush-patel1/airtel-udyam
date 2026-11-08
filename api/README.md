@@ -22,7 +22,17 @@ Vercel serverless Express API for the Airtel Udyam OneShot prototype.
 1. Provision Firebase Realtime Database and set `FIREBASE_DATABASE_URL` plus the service-account credential.
 2. Generate and configure `DATA_ENCRYPTION_KEY` and `TOKENIZATION_SECRET` before storing business identifiers, OCR text or message content. Keep backups of the keys in a secure secret manager; losing the encryption key makes ciphertext unrecoverable.
 3. Run `npm install`. This repository uses the Firebase Realtime Database adapter; there are no Prisma migration or `db:generate` scripts.
-4. Create the first ADMIN account using a secure, one-time provisioning script (do not expose public signup).
+4. Create the first ADMIN account from a trusted local machine (never expose public signup):
+   ```bash
+   npm install
+   ADMIN_EMAIL="admin@your-company.example" ADMIN_NAME="Airtel Admin" ADMIN_PASSWORD="use-a-unique-14+-character-password" npm run admin:create
+   ```
+   Run this only after `FIREBASE_DATABASE_URL` and `FIREBASE_SERVICE_ACCOUNT_BASE64` are available in the local process environment. The script creates an active ADMIN user with a bcrypt-hashed password in Firebase and refuses to overwrite an existing email. Do not commit credentials or put them in frontend variables. Use a unique password and store it in a password manager. For additional staff, provision SALES, REVIEWER or OPERATIONS accounts through a trusted administrative process; do not create public registration.
+5. Configure the environment variables in Vercel Project Settings. Keep all secrets server-side.
+6. Deploy. Verify `GET /api/health`, sign in at the website using the provisioned account, and verify role-restricted routes such as `GET /api/admin/overview`.
+7. Run `npm test` for API smoke tests.
+8. In Meta Developer dashboard, configure the WhatsApp webhook URL as `https://YOUR_DOMAIN/api/webhooks/whatsapp`, verify token, and subscribe to `messages`.
+9. Uploads use short-lived signed URLs; browser PUT must include the returned Content-Type header. The KYC OCR endpoint sends the stored S3 object to Textract.
 5. Configure the environment variables in Vercel Project Settings.
 6. Deploy. Verify `GET /api/health` and, after staff sign-in, `GET /api/admin/integrations`. Run `npm test` for API smoke tests.
 7. In Meta Developer dashboard, configure the WhatsApp webhook URL as `https://YOUR_DOMAIN/api/webhooks/whatsapp`, verify token, and subscribe to `messages`.
