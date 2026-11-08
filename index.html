@@ -887,7 +887,7 @@ async function submitVerificationDecision(decision){
  try{const response=await fetch("/api/kyc/"+encodeURIComponent(selectedVerificationDocument)+"/review",{method:"POST",headers:staffApiHeaders(),body:JSON.stringify({decision,notes})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not save review decision");toast("Document decision recorded: "+decision,"success");selectedVerificationDocument=null;await renderVerificationDesk()}
  catch(error){toast(error.message||"Review decision failed","error")}
 }
-function restoreStaffSession(){try{const d=JSON.parse(sessionStorage.getItem("udyam_staff_session")||"null");if(d?.token&&d?.user)staffSession=d}catch{}applyRoleAccess()}
+async function restoreStaffSession(){let saved=null;try{saved=JSON.parse(sessionStorage.getItem("udyam_staff_session")||"null")}catch{}if(saved?.token){try{const r=await fetch("/api/auth/me",{headers:{Authorization:"Bearer "+saved.token},signal:AbortSignal.timeout(8000)});if(!r.ok)throw new Error("Session expired");const d=await r.json();staffSession={...saved,user:{...saved.user,...d.user}}}catch{staffSession=null;sessionStorage.removeItem("udyam_staff_session")}}applyRoleAccess()}
 const UI_LANG_NAMES={auto:"Auto",en:"English",hi:"Hindi","hi-Latn":"Hinglish",bn:"Bengali",mr:"Marathi",ta:"Tamil",te:"Telugu",gu:"Gujarati",kn:"Kannada",ml:"Malayalam",pa:"Punjabi"};
 const UI_SUPPORTED=["hi","hi-Latn","bn","mr","ta","te","gu","kn","ml","pa"];
 let uiActiveLanguage="en",uiLocaleObserver=null,uiLocaleApplyQueued=false,assistantRequestPending=false;
