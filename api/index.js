@@ -249,12 +249,16 @@ app.post("/api/assistant/chat",asyncRoute(async(req,res)=>{
 }));
 
 // Bootstrap is intentionally disabled in production. Create the first ADMIN through a one-time secure script.
+const loginAttempts=new Map();
 app.post("/api/auth/login", asyncRoute(async(req,res) => {
   const input=validate(z.object({email:z.email(),password:z.string().min(8)}),req.body);
+  const key=(req.ip||"unknown")+":"+input.email.toLowerCase(),now=Date.now(),attempts=(loginAttempts.get(key)||[]).filter(t=>now-t<15*60*1000);
+  if(attempts.length>=8)return res.status(429).json({error:"Too many sign-in attempts. Wait 15 minutes and try again."});
   const user=await prisma.user.findUnique({where:{email:input.email.toLowerCase()}});
-  if(!user || !user.active || !(await bcrypt.compare(input.password,user.passwordHash))) return res.status(401).json({error:"Invalid credentials"});
+  if(!user || !user.active || !(await bcrypt.compare(input.password,user.passwordHash))){attempts.push(now);loginAttempts.set(key,attempts);return res.status(401).json({error:"Invalid credentials"});}
+  loginAttempts.delete(key);
   const token=await makeToken(user); await audit({user:{sub:user.id},ip:req.ip},"AUTH_LOGIN","User",user.id);
-  res.json({token,expiresIn:28800,user:{id:user.id,name:user.name,email:user.email,role:user.role}});
+  res.set("Cache-Control","no-store");res.json({token,expiresIn:28800,user:{id:user.id,name:user.name,email:user.email,role:user.role}});
 }));
 app.get("/api/auth/me",auth,(req,res)=>res.json({user:req.user}));
 
