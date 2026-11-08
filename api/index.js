@@ -512,6 +512,24 @@ function scoreLead(business,quotes,documents,orders){
  const nextAction=latestOrder?.status==="KYC_PENDING"?"Call to resolve KYC blockers":latestQuote&&!latestOrder?"Call to review the quote":!latestQuote?"Call to understand needs and build a bundle":"Call to confirm the next onboarding step";
  return {score,priority:score>=70?"HIGH":score>=45?"MEDIUM":"LOW",reasons,factors,baseScore:22,nextAction};
 }
+app.get("/api/admin/overview",auth,allow("ADMIN"),asyncRoute(async(req,res)=>{
+ const [businesses,quotes,documents,orders,messages,consents]=await Promise.all([
+  prisma.business.findMany({orderBy:{createdAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),
+  prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}}),
+  prisma.message.findMany({orderBy:{createdAt:"desc"},take:100}),prisma.consent.findMany({orderBy:{createdAt:"desc"}})
+ ]);
+ const active=businesses.filter(b=>!["WON","LOST","CLOSED_WON","CLOSED_LOST"].includes(b.advisorOutcome||"OPEN"));
+ const high=active.map(b=>{const qs=quotes.filter(q=>q.businessId===b.id),ds=documents.filter(d=>d.businessId===b.id),os=orders.filter(o=>o.businessId===b.id);return {business:b,score:scoreLead(b,qs,ds,os)}}).sort((a,b)=>b.score.score-a.score.score);
+ const verified=documents.filter(d=>d.reviewStatus==="VERIFIED").length;
+ const waOptIns=businesses.filter(b=>consents.some(c=>c.businessId===b.id&&c.channel==="WHATSAPP"&&c.granted)).length;
+ const callbackOptIns=businesses.filter(b=>consents.some(c=>c.businessId===b.id&&c.channel==="WEB"&&c.granted)).length;
+ const overdue=active.filter(b=>b.followUpAt&&new Date(b.followUpAt).getTime()<=Date.now()).length;
+ const funnel=[{label:"Business enquiries",value:businesses.length},{label:"Quotes created",value:quotes.length},{label:"KYC documents",value:documents.length},{label:"Documents verified",value:verified},{label:"Active orders",value:orders.filter(o=>o.status==="ACTIVE").length}];
+ const stages={open:active.length,quoted:quotes.length,kycPending:documents.filter(d=>d.reviewStatus!=="VERIFIED").length,verified,activeOrders:orders.filter(o=>o.status==="ACTIVE").length};
+ const latest=high.slice(0,8).map(x=>({...businessStaffView(x.business),score:x.score.score,priority:x.score.priority,nextAction:x.score.nextAction,callbackConsent:consents.some(c=>c.businessId===x.business.id&&c.channel==="WEB"&&c.granted),whatsappConsent:consents.some(c=>c.businessId===x.business.id&&c.channel==="WHATSAPP"&&c.granted)}));
+ res.set("Cache-Control","no-store");
+ res.json({generatedAt:new Date().toISOString(),metrics:{totalLeads:businesses.length,activeLeads:active.length,highPriority:high.filter(x=>x.score.priority==="HIGH").length,overdueFollowUps:overdue,quotes:quotes.length,pendingKyc:documents.filter(d=>d.reviewStatus!=="VERIFIED").length,verifiedKyc:verified,activeOrders:orders.filter(o=>o.status==="ACTIVE").length,callbackOptIns,whatsappOptIns,whatsappMessages:messages.filter(m=>m.channel==="WHATSAPP").length},funnel,stages,topLeads:latest,whatsapp:{configured:!!(process.env.WHATSAPP_TOKEN&&process.env.WHATSAPP_PHONE_NUMBER_ID),webhookConfigured:!!(process.env.WHATSAPP_VERIFY_TOKEN&&process.env.WHATSAPP_APP_SECRET)},dataNote:"Operational counts from the connected prototype database. Synthetic Track A sample data is not live Airtel commercial performance."});
+}));
 app.get("/api/staff/leads",auth,allow("ADMIN","SALES","OPERATIONS"),asyncRoute(async(req,res)=>{
  const [businesses,quotes,documents,orders,consents]=await Promise.all([prisma.business.findMany({orderBy:{updatedAt:"desc"}}),prisma.quote.findMany({orderBy:{createdAt:"desc"}}),prisma.kycDocument.findMany({orderBy:{createdAt:"desc"}}),prisma.order.findMany({orderBy:{updatedAt:"desc"}}),prisma.consent.findMany({orderBy:{createdAt:"desc"}})]);
  const rows=businesses.filter(b=>!["WON","LOST","CLOSED_WON","CLOSED_LOST"].includes(b.advisorOutcome||"OPEN")).map(b=>{
